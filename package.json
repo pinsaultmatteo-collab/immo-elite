@@ -1,0 +1,16 @@
+{
+  "name": "club-immo-elite",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Page de vente du Club IMMO Élite : site statique + deux fonctions serveur Stripe (Vercel).",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "dev": "vercel dev",
+    "serve": "python3 -m http.server 4173",
+    "deploy": "vercel --prod"
+  },
+  "dependencies": {
+    "stripe": "^16.12.0"
+  }
+}

@@ -1,0 +1,37 @@
+/* =========================================================
+   Configuration du site — à compléter par Mattéo.
+   Ce fichier est chargé avant les autres scripts.
+   ========================================================= */
+window.IE_CONFIG = {
+  // Lien de réservation de l'appel découverte (Calendly, Cal.com, Zcal…).
+  // Vide : les boutons « appel offert » ouvrent un e-mail pré-rempli.
+  bookingUrl: "",
+  bookingFallbackEmail: "contact@immoelite-formation.fr",
+
+  // Vidéo de présentation, hébergée sur le site (format vertical 9:16).
+  // Si vimeoId est renseigné, c'est Vimeo qui est utilisé à la place.
+  video: {
+    mp4: "assets/video/mon-histoire-1080.mp4",       // desktop
+    mp4Mobile: "assets/video/mon-histoire-720.mp4",  // écrans ≤ 720 px
+    poster: "assets/video/mon-histoire-poster.jpg",
+    title: "",            // laissé vide : la carte-titre « Mon histoire » est déjà dans l'image d'aperçu
+    duration: "1 min 32"
+  },
+
+  // Identifiant Vimeo de la vidéo verticale (prioritaire sur `video` s'il est rempli).
+  vimeoId: "",
+
+  // Paiement : la fonction serveur qui crée la session Stripe Checkout.
+  checkoutEndpoint: "/api/create-checkout-session",
+  // Secours : un Payment Link Stripe si la fonction serveur n'est pas déployée.
+  checkoutFallbackUrl: "",
+
+  // Lien de connexion au portail client Stripe (Paramètres > Portail client).
+  portalUrl: "",
+
+  // Pixel Meta. Ne se charge qu'après consentement.
+  pixelId: "958400803630500",
+
+  // Les 4 témoignages de l'ancienne page : passer à false s'ils ne sont pas confirmés.
+  showTestimonials: true
+};
