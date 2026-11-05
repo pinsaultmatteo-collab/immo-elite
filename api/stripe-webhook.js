@@ -7,7 +7,8 @@
  *
  * Idempotent : si l'abonnement a déjà un calendrier, on ne fait rien.
  * Événements à activer dans le Dashboard Stripe :
- *   checkout.session.completed, customer.subscription.deleted, invoice.payment_failed
+ *   checkout.session.completed, customer.subscription.updated,
+ *   customer.subscription.deleted, invoice.payment_failed
  *
  * Variables d'environnement requises :
  *   STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET (whsec_…)
@@ -23,7 +24,11 @@ function text(body, status = 200) {
   return new Response(body, { status, headers: { "Content-Type": "text/plain; charset=utf-8" } });
 }
 
-async function attachCommitment(stripe, subscriptionId) {
+/**
+ * Attache l'engagement de 12 mois à un abonnement. Idempotent.
+ * Exporté pour les tests (scripts/stripe-test-clock.mjs).
+ */
+export async function attachCommitment(stripe, subscriptionId) {
   const sub = await stripe.subscriptions.retrieve(subscriptionId);
 
   // Déjà fait (double réception du webhook, ou ajout manuel depuis le Dashboard)
@@ -34,28 +39,40 @@ async function attachCommitment(stripe, subscriptionId) {
   // 1. Crée un calendrier à partir de l'abonnement existant
   const created = await stripe.subscriptionSchedules.create({ from_subscription: sub.id });
 
-  // 2. Règle la phase courante sur 12 mois, puis libère l'abonnement
+  // 2. Règle la phase courante sur 12 mois, puis libère l'abonnement.
+  //    Stripe retire les réglages omis d'une phase : on recopie explicitement
+  //    le moyen de paiement posé par Checkout, sinon le prélèvement du mois 2 peut échouer.
   const currentPhase = created.phases[0];
   const items = currentPhase.items.map((it) => ({ price: typeof it.price === "string" ? it.price : it.price.id, quantity: it.quantity || 1 }));
+  const paymentMethod = typeof sub.default_payment_method === "string" ? sub.default_payment_method : sub.default_payment_method?.id;
+  const phase = {
+    items,
+    start_date: currentPhase.start_date,
+    iterations: COMMITMENT_ITERATIONS, // version d'API épinglée 2024-06-20 ; les versions récentes utilisent `duration`
+    proration_behavior: "none",
+    collection_method: sub.collection_method || "charge_automatically",
+    metadata: { ...sub.metadata, commitment: "12-months", product: "club-immo-elite" },
+  };
+  if (paymentMethod) phase.default_payment_method = paymentMethod;
+  if (sub.description) phase.description = sub.description;
+
   const schedule = await stripe.subscriptionSchedules.update(created.id, {
     end_behavior: "release",
-    phases: [
-      {
-        items,
-        start_date: currentPhase.start_date,
-        iterations: COMMITMENT_ITERATIONS,
-        proration_behavior: "none",
-        metadata: { commitment: "12-months", product: "club-immo-elite" },
-      },
-    ],
+    phases: [phase],
   });
 
-  // 3. Trace sur l'abonnement, pour l'idempotence et le support
+  // 3. Trace sur l'abonnement, pour l'idempotence, le support et l'e-mail d'avant-échéance
+  const commitmentEnd = schedule.phases[0]?.end_date;
   await stripe.subscriptions.update(sub.id, {
-    metadata: { ...sub.metadata, commitment_schedule_id: schedule.id, commitment_months: String(COMMITMENT_ITERATIONS) },
+    metadata: {
+      ...sub.metadata,
+      commitment_schedule_id: schedule.id,
+      commitment_months: String(COMMITMENT_ITERATIONS),
+      commitment_end: commitmentEnd ? String(commitmentEnd) : "",
+    },
   });
 
-  return { skipped: false, scheduleId: schedule.id };
+  return { skipped: false, scheduleId: schedule.id, commitmentEnd };
 }
 
 async function notifySkoolInvite({ email, name, customerId, subscriptionId }) {
@@ -108,6 +125,17 @@ export async function POST(request) {
             customerId: typeof session.customer === "string" ? session.customer : session.customer?.id,
             subscriptionId,
           });
+        }
+        break;
+      }
+      case "customer.subscription.updated": {
+        // Alerte : une résiliation demandée pendant les 12 mois (portail client) ne doit pas
+        // couper l'engagement. On ne corrige rien automatiquement : on trace pour Mattéo.
+        const sub = event.data.object;
+        const end = Number(sub.metadata?.commitment_end || 0);
+        const stopsAt = sub.cancel_at || (sub.cancel_at_period_end ? sub.current_period_end : 0);
+        if (end && stopsAt && stopsAt < end - 86400) {
+          console.warn(`[webhook] ALERTE engagement — abonnement ${sub.id} programmé pour s'arrêter le ${new Date(stopsAt * 1000).toISOString()}, avant la fin d'engagement du ${new Date(end * 1000).toISOString()}.`);
         }
         break;
       }

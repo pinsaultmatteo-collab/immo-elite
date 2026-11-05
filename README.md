@@ -81,38 +81,55 @@ Puis ouvrir http://localhost:4173. Les boutons de paiement affichent un message 
 
 ## 3. Stripe, en mode test d'abord
 
-1. Dans le Dashboard Stripe (mode test) : créer le produit « Club IMMO Élite », prix récurrent **97 € / mois**, TVA incluse (`tax_behavior = inclusive`, taux 20 % à confirmer avec le comptable). Noter l'ID `price_…`.
-2. Activer le **portail client** (Paramètres > Facturation > Portail client) avec la résiliation autorisée. Copier le lien de connexion dans `config.js` (`portalUrl`).
-3. Copier `.env.example` en `.env.local` et remplir `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, `SITE_URL`.
-4. Lancer en local avec les fonctions :
+### Une seule fois, dans le Dashboard Stripe (mode test)
+
+1. **Paramètres > Informations publiques** : renseigner l'adresse des CGV `https://club.immoelite-formation.fr/cgv` et de la confidentialité `https://club.immoelite-formation.fr/confidentialite`. Sans l'adresse des CGV, Stripe refuse la case CGV obligatoire de Checkout.
+2. **Développeurs > Clés API** : copier la clé secrète de test `sk_test_…`.
+3. Créer le fichier `.env.local` à la racine du dossier `site` avec cette seule ligne (le fichier est ignoré par Git) :
+
+```bash
+echo "STRIPE_SECRET_KEY=COLLE_TA_CLE_SK_TEST_ICI" > .env.local
+```
+
+### Configuration automatique
 
 ```bash
 npm install
-npx vercel dev
+node scripts/stripe-setup.mjs
 ```
 
-5. Dans un autre terminal, recevoir les webhooks en local et récupérer le `whsec_…` à mettre dans `.env.local` :
+Le script est relançable sans doublon. Il crée le produit et le prix de 97 € TTC par mois, configure le portail client (résiliation en ligne, factures, carte), crée l'endpoint webhook sur `https://club.immoelite-formation.fr/api/stripe-webhook`, puis crée une vraie session Checkout pour vérifier que Stripe accepte tout. Il écrit `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET` et `SITE_URL` dans `.env.local` sans les afficher, et affiche le **lien de connexion au portail client** à coller dans `assets/js/config.js` (`portalUrl`).
+
+### Dans Vercel
+
+**Settings > Environment Variables**, environnement Production : `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET`, `SITE_URL` (valeurs de `.env.local`). Puis **Deployments > Redeploy** pour que les fonctions les lisent.
+
+Tant que ce sont des clés de test, la page de paiement affiche « Mode test » et aucune vraie carte n'est acceptée. Mieux vaut ne pas mettre le lien en bio Instagram avant le passage en mode réel.
+
+### Tests du brief
 
 ```bash
-stripe listen --forward-to localhost:3000/api/stripe-webhook
+node scripts/stripe-test-clock.mjs
 ```
 
-6. Payer avec la carte de test `4242 4242 4242 4242`. Vérifier : redirection vers `/merci.html?session_id=cs_test_…`, un calendrier d'abonnement de 12 mois visible sur l'abonnement, `end_behavior = release`.
+Horloges de test Stripe, rien n'est facturé. Le script vérifie qu'un webhook reçu deux fois ne crée qu'un calendrier, qu'après 12 mois l'abonnement continue au mois le mois avec chaque mois payé, et si une résiliation demandée au mois 3 coupe l'engagement. Avec `--keep`, il garde les horloges et donne un lien vers le vrai portail client d'un abonné de test au mois 3, pour essayer la résiliation à la main.
 
-### Les tests demandés dans le brief (horloge de test Stripe)
+Paiement de bout en bout sur le site : bouton « Rejoindre le club », carte `4242 4242 4242 4242`, date future, n'importe quel code. Vérifier l'arrivée sur `/merci`, puis dans Stripe l'abonnement avec son calendrier de 12 mois et la métadonnée `commitment_end`.
 
-- [ ] Paiement réussi → page de remerciement, événement Purchase envoyé une seule fois (recharger la page : pas de second envoi).
-- [ ] Webhook reçu deux fois (`stripe events resend evt_…`) → un seul calendrier (le second passage répond `skipped: schedule-exists`).
-- [ ] Avec une horloge de test, avancer de 13 mois : l'abonnement continue au mois le mois après la libération du calendrier.
-- [ ] **Résiliation au mois 3 depuis le portail.** Point à surveiller : tant qu'un calendrier est actif, le portail Stripe peut refuser la modification ou la résiliation de l'abonnement. Si la résiliation coupe l'abonnement immédiatement, ou si elle est impossible, prévenir Mattéo : la solution de repli du plan Skool est un formulaire de résiliation sur la page, traité à la main, en respectant l'engagement.
-- [ ] Le Pixel reste muet tant que les cookies ne sont pas acceptés (onglet Réseau : aucune requête vers facebook.net avant « Accepter »).
-- [ ] Tout se lit et se clique à 375 px de large.
+- [ ] Un paiement réussi mène à la page de remerciement, et l'événement Purchase part une seule fois
+- [ ] Le webhook crée un seul calendrier de 12 mois, même reçu deux fois (`stripe-test-clock.mjs`, test A)
+- [ ] Passé 12 mois, l'abonnement continue au mois le mois (test B)
+- [ ] Une résiliation demandée au mois 3 ne coupe pas l'engagement (test C, puis portail à la main avec `--keep`). Si elle le coupe : décision à prendre avant la production
+- [ ] Le Pixel reste muet tant que les cookies ne sont pas acceptés
+- [ ] Tout se lit et se clique à 375 px de large
+
+Le webhook écrit aussi une **alerte dans les logs Vercel** (`ALERTE engagement`) si un abonné programme un arrêt avant la fin de ses 12 mois.
 
 ### Passage en production
 
-1. Clés `sk_live_…`, `price_…` live, nouveau endpoint webhook en mode live (événements : `checkout.session.completed`, `customer.subscription.deleted`, `invoice.payment_failed`) et son `whsec_…`.
-2. Renseigner ces variables dans Vercel > Settings > Environment Variables (Production).
-3. `SITE_URL=https://club.immoelite-formation.fr`.
+1. Mode réel dans Stripe : refaire « Informations publiques » si besoin, copier `sk_live_…` dans `.env.local`.
+2. `node scripts/stripe-setup.mjs --live` : crée le prix, le portail et le webhook en mode réel.
+3. Remplacer les quatre variables dans Vercel, mettre le lien de portail live dans `config.js`, redéployer.
 
 ## 4. Déploiement Vercel
 
