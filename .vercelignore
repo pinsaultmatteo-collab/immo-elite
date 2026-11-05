@@ -1,0 +1,4 @@
+# Outils locaux : jamais publiés sur le site
+scripts/
+.env*
+!.env.example
