@@ -116,6 +116,10 @@ stripe listen --forward-to localhost:3000/api/stripe-webhook
 
 ## 4. Déploiement Vercel
 
+**En production** : https://club.immoelite-formation.fr (page de vente) et https://club.immoelite-formation.fr/liens (lien en bio Instagram). Adresse Vercel de secours : https://immo-elite-xi.vercel.app. Chaque push sur `main` redéploie automatiquement.
+
+Le domaine principal `www.immoelite-formation.fr` reste sur systeme.io : il héberge la masterclass (`/masterclassofferte`, `/formationofferte`, `/inscriptionconfirmee`) et les anciennes pages. Ne pas le basculer sur Vercel sans avoir déplacé ces tunnels.
+
 ```bash
 npx vercel
 ```
@@ -128,7 +132,7 @@ Pour l'instant, l'invitation se fait à la main depuis les notifications de paie
 
 ## 6. Questions restées ouvertes (brief, dernière section)
 
-1. Hébergement et sous-domaine : proposition `club.immoelite-formation.fr` sur Vercel.
+1. ~~Hébergement et sous-domaine.~~ Réglé : Vercel, `club.immoelite-formation.fr` (CNAME OVH vers Vercel, HTTPS Let's Encrypt automatique). `www` reste sur systeme.io pour la masterclass.
 2. Identifiant du prix Stripe, et confirmation que 97 € est bien TTC.
 3. ~~Lien de réservation de l'appel offert.~~ Branché : Calendly, appel découverte 30 min.
 4. Photos en haute définition (la vidéo « Mon histoire » est intégrée ; un lien Vimeo reste possible plus tard).
