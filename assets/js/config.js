@@ -5,7 +5,7 @@
 window.IE_CONFIG = {
   // Lien de réservation de l'appel découverte (Calendly, Cal.com, Zcal…).
   // Vide : les boutons « appel offert » ouvrent un e-mail pré-rempli.
-  bookingUrl: "",
+  bookingUrl: "https://calendly.com/immoeliteappel/appel-decouverte-30-min",
   bookingFallbackEmail: "contact@immoelite-formation.fr",
 
   // Vidéo de présentation, hébergée sur le site (format vertical 9:16).

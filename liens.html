@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <script>document.documentElement.classList.add("js");</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Mattéo Pinsault — IMMO Élite</title>
+  <meta name="description" content="Investisseur immobilier à Toulouse : 18 lots, 11 prêts, premier achat à 18 ans. Rejoins le Club IMMO Élite ou réserve un appel découverte offert de 30 minutes.">
+  <meta name="robots" content="noindex, follow">
+  <meta name="theme-color" content="#1A1714">
+  <link rel="icon" type="image/png" href="assets/img/icon-128.png">
+  <link rel="apple-touch-icon" href="assets/img/icon-128.png">
+  <meta property="og:type" content="profile">
+  <meta property="og:locale" content="fr_FR">
+  <meta property="og:title" content="Mattéo Pinsault — IMMO Élite">
+  <meta property="og:description" content="Deux façons d'avancer avec moi : le Club IMMO Élite, ou un appel découverte offert de 30 minutes.">
+  <meta property="og:image" content="assets/img/og-cover.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Manrope:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/styles.css">
+  <style>
+    /* ---------- Page lien en bio ---------- */
+    body.bio { background: var(--ink); color: var(--text-on-dark); min-height: 100svh; }
+    .bio-bg { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+    .bio-bg svg { position: absolute; left: 50%; bottom: -6vh; width: min(140vw, 900px); transform: translateX(-50%); opacity: .14; }
+    .bio-bg svg * { stroke: var(--gold-light); }
+    .bio-bg .lit { fill: var(--gold-light); fill-opacity: .7; }
+
+    .bio-wrap { position: relative; max-width: 520px; margin: 0 auto; padding: calc(28px + env(safe-area-inset-top)) var(--gutter) 40px; display: flex; flex-direction: column; min-height: 100svh; }
+
+    .bio-head { text-align: center; }
+    .bio-avatar { position: relative; width: 104px; height: 104px; margin: 0 auto 16px; border-radius: 50%; }
+    .bio-avatar::before { content: ""; position: absolute; inset: -6px; border-radius: 50%; border: 1.5px solid var(--gold-light); opacity: .9; animation: ring 6s linear infinite; }
+    .bio-avatar::after { content: ""; position: absolute; inset: -6px; border-radius: 50%; border: 1.5px dashed rgba(201,164,88,.35); }
+    .bio-avatar img { width: 100%; height: 100%; object-fit: cover; object-position: center 20%; border-radius: 50%; border: 3px solid var(--ink); box-shadow: 0 18px 40px rgba(0,0,0,.45); }
+    @keyframes ring { to { transform: rotate(360deg); } }
+    .bio-avatar::before { border-right-color: transparent; border-bottom-color: transparent; }
+    .bio-head h1 { font-size: clamp(1.75rem, 1.4rem + 1.6vw, 2.3rem); color: var(--cream); letter-spacing: -0.03em; }
+    .bio-tag { margin-top: 6px; color: var(--muted-dark); font-weight: 600; font-size: .95rem; }
+    .bio-proof { display: flex; justify-content: center; flex-wrap: wrap; gap: 6px 14px; margin-top: 14px; font-size: .74rem; letter-spacing: .14em; text-transform: uppercase; font-weight: 700; color: var(--gold-light); }
+    .bio-proof li { display: inline-flex; align-items: center; gap: 14px; }
+    .bio-proof li + li::before { content: ""; width: 4px; height: 4px; border-radius: 50%; background: var(--gold-light); opacity: .7; }
+
+    .bio-intro { margin: 22px 0 14px; text-align: center; font-family: var(--font-display); font-weight: 600; font-size: 1.1rem; color: var(--cream); letter-spacing: -0.01em; }
+
+    .doors { display: grid; gap: 14px; perspective: 1200px; }
+    .door { position: relative; display: block; border-radius: 22px; padding: 26px 24px 24px; text-decoration: none; overflow: hidden; transform-style: preserve-3d; transition: transform .6s var(--ease-out), box-shadow .6s var(--ease-out), border-color .4s ease; min-height: 44px; }
+    .door:hover { transform: translateY(-4px); }
+    .door:active { transform: translateY(0) scale(.99); }
+    .door > span { display: block; position: relative; }
+    .door-eyebrow { font-size: .7rem; letter-spacing: .2em; text-transform: uppercase; font-weight: 700; margin-bottom: 12px; }
+    .door-title { font-family: var(--font-display); font-weight: 700; font-size: clamp(1.35rem, 1.2rem + .8vw, 1.7rem); line-height: 1.1; letter-spacing: -0.025em; padding-right: 54px; }
+    .door-text { margin-top: 10px; font-size: .95rem; line-height: 1.5; padding-right: 20px; }
+    .door-meta { margin-top: 16px; font-size: .82rem; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+    .door-meta::before { content: ""; width: 18px; height: 1px; background: currentColor; opacity: .7; }
+    .door-arrow { position: absolute !important; top: 22px; right: 22px; width: 44px; height: 44px; border-radius: 50%; display: grid !important; place-items: center; transition: transform .5s var(--ease-out), background-color .3s ease; }
+    .door-arrow svg { width: 20px; height: 20px; }
+    .door:hover .door-arrow { transform: translate(4px, -4px); }
+    .door-line { position: absolute !important; left: 24px; right: 24px; bottom: 0; height: 2px; transform: scaleX(0); transform-origin: left; transition: transform .6s var(--ease-out); }
+    .door:hover .door-line { transform: scaleX(1); }
+
+    .door--club { background: var(--gold); color: var(--ink); border: 1px solid var(--gold); box-shadow: 0 24px 60px rgba(176,141,63,.22); }
+    .door--club:hover { background: var(--gold-light); box-shadow: 0 30px 70px rgba(176,141,63,.35); }
+    .door--club .door-eyebrow { color: var(--ink); opacity: .75; }
+    .door--club .door-text { color: #2A2318; }
+    .door--club .door-arrow { background: var(--ink); color: var(--gold-light); }
+    .door--club .door-line { background: var(--ink); }
+
+    .door--call { background: var(--ink-2); color: var(--cream); border: 1px solid rgba(201,164,88,.35); }
+    .door--call:hover { border-color: var(--gold-light); box-shadow: 0 30px 70px rgba(0,0,0,.45); }
+    .door--call .door-eyebrow { color: var(--gold-light); }
+    .door--call .door-text { color: var(--muted-dark); }
+    .door--call .door-meta { color: var(--gold-light); }
+    .door--call .door-arrow { background: transparent; border: 1.5px solid var(--gold-light); color: var(--gold-light); }
+    .door--call .door-line { background: var(--gold-light); }
+
+    .bio-story { margin-top: 22px; text-align: center; font-size: .92rem; color: var(--muted-dark); }
+    .bio-story a { color: var(--gold-light); font-weight: 700; }
+
+    .bio-foot { margin-top: auto; padding-top: 40px; text-align: center; font-size: .8rem; color: var(--muted-dark); }
+    .bio-social { display: flex; justify-content: center; gap: 10px; margin-bottom: 18px; }
+    .bio-social a { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--line-dark); color: var(--text-on-dark); font-weight: 700; font-size: .85rem; transition: border-color .3s ease, color .3s ease, transform .4s var(--ease-out); }
+    .bio-social a:hover { border-color: var(--gold-light); color: var(--gold-light); transform: translateY(-2px); }
+    .bio-social svg { width: 18px; height: 18px; fill: currentColor; }
+    .bio-legal { display: flex; justify-content: center; flex-wrap: wrap; gap: 6px 16px; }
+    .bio-legal a, .bio-legal button { color: var(--muted-dark); min-height: 32px; display: inline-flex; align-items: center; font: inherit; }
+    .bio-legal a:hover, .bio-legal button:hover { color: var(--gold-light); }
+    .bio-foot p { margin-top: 14px; line-height: 1.5; max-width: 42ch; margin-left: auto; margin-right: auto; }
+
+    /* Carte vidéo compacte + lecteur plein écran */
+    .story-card { position: relative; display: grid; grid-template-columns: 68px 1fr 44px; align-items: center; gap: 16px; width: 100%; margin: 20px 0 0; padding: 10px 12px 10px 10px; border-radius: 20px; background: var(--ink-2); border: 1px solid rgba(201,164,88,.35); color: var(--cream); text-align: left; cursor: pointer; transition: transform .5s var(--ease-out), border-color .3s ease, box-shadow .5s var(--ease-out); }
+    .story-card:hover { transform: translateY(-3px); border-color: var(--gold-light); box-shadow: 0 24px 50px rgba(0,0,0,.4); }
+    .story-thumb { position: relative; width: 68px; aspect-ratio: 9 / 16; border-radius: 12px; overflow: hidden; background: #000; }
+    .story-thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .story-thumb::after { content: none; }
+    .story-thumb .story-play { position: absolute; left: 50%; bottom: 8px; top: auto; transform: translateX(-50%); width: 30px; height: 30px; border-radius: 50%; background: var(--gold); box-shadow: 0 4px 12px rgba(0,0,0,.45); display: grid; place-items: center; z-index: 1; transition: transform .4s var(--ease-out); }
+    .story-thumb .story-play svg { width: 14px; height: 14px; fill: var(--ink); margin-left: 2px; }
+    .story-card:hover .story-play { transform: translateX(-50%) scale(1.1); }
+    .story-eyebrow { font-size: .68rem; letter-spacing: .2em; text-transform: uppercase; font-weight: 700; color: var(--gold-light); }
+    .story-title { display: block; margin-top: 4px; font-family: var(--font-display); font-weight: 700; font-size: 1.15rem; letter-spacing: -0.02em; line-height: 1.1; color: var(--cream); }
+    .story-sub { display: block; margin-top: 5px; font-size: .85rem; color: var(--muted-dark); font-weight: 600; }
+    .story-arrow { width: 44px; height: 44px; border-radius: 50%; border: 1.5px solid var(--gold-light); color: var(--gold-light); display: grid; place-items: center; transition: transform .5s var(--ease-out), background-color .3s ease; }
+    .story-arrow svg { width: 18px; height: 18px; }
+    .story-card:hover .story-arrow { background: rgba(201,164,88,.15); transform: translateX(3px); }
+
+    .story-modal { position: fixed; inset: 0; z-index: 110; display: grid; place-items: center; padding: 16px; background: rgba(26,23,20,.94); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); opacity: 0; pointer-events: none; transition: opacity .35s ease; }
+    .story-modal.is-open { opacity: 1; pointer-events: auto; }
+    .story-player { position: relative; width: min(100%, calc((100svh - 96px) * 9 / 16), 420px); aspect-ratio: 9 / 16; border-radius: 22px; overflow: hidden; background: #000; box-shadow: 0 40px 90px rgba(0,0,0,.6); border: 1px solid rgba(201,164,88,.3); transform: translateY(16px) scale(.98); transition: transform .45s var(--ease-out); }
+    .story-modal.is-open .story-player { transform: none; }
+    .story-player video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    .story-close { position: absolute; top: calc(14px + env(safe-area-inset-top)); right: 14px; width: 48px; height: 48px; border-radius: 50%; border: 1px solid rgba(201,164,88,.45); background: rgba(26,23,20,.6); color: var(--cream); display: grid; place-items: center; z-index: 2; }
+    .story-close svg { width: 20px; height: 20px; stroke: currentColor; stroke-width: 2; fill: none; stroke-linecap: round; }
+    .story-caption { position: absolute; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom)); transform: translateX(-50%); font-size: .8rem; color: var(--muted-dark); white-space: nowrap; }
+    body.has-modal { overflow: hidden; }
+
+    /* Entrées en scène */
+    .js .rise { opacity: 0; transform: translateY(18px); animation: rise .9s var(--ease-out) forwards; }
+    .js .rise[data-d="1"] { animation-delay: .12s; } .js .rise[data-d="2"] { animation-delay: .24s; } .js .rise[data-d="3"] { animation-delay: .36s; } .js .rise[data-d="4"] { animation-delay: .48s; } .js .rise[data-d="5"] { animation-delay: .6s; }
+    @keyframes rise { to { opacity: 1; transform: none; } }
+    @media (prefers-reduced-motion: reduce) { .js .rise { animation: none; opacity: 1; transform: none; } .bio-avatar::before { animation: none; } }
+
+    @media (min-width: 720px) {
+      .bio-wrap { padding-top: 64px; max-width: 560px; }
+      .door { padding: 32px 30px 30px; }
+      .bio-bg svg { bottom: -4vh; opacity: .12; }
+    }
+  </style>
+</head>
+<body class="bio">
+
+<div class="bio-bg" aria-hidden="true">
+  <svg viewBox="0 0 400 300" fill="none" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" id="bio-art">
+    <rect x="32" y="122" width="92" height="148"/>
+    <rect x="48" y="140" width="20" height="20"/><rect x="84" y="140" width="20" height="20"/>
+    <rect x="48" y="172" width="20" height="20"/><rect x="84" y="172" width="20" height="20" class="lit"/>
+    <rect x="48" y="204" width="20" height="20"/><rect x="84" y="204" width="20" height="20"/>
+    <rect x="48" y="236" width="20" height="20" class="lit"/><rect x="84" y="236" width="20" height="20"/>
+    <polyline points="140,112 200,52 260,112"/>
+    <rect x="150" y="112" width="100" height="158"/>
+    <rect x="162" y="128" width="18" height="18"/><rect x="191" y="128" width="18" height="18"/><rect x="220" y="128" width="18" height="18"/>
+    <rect x="162" y="158" width="18" height="18"/><rect x="191" y="158" width="18" height="18" class="lit"/><rect x="220" y="158" width="18" height="18"/>
+    <rect x="162" y="188" width="18" height="18"/><rect x="191" y="188" width="18" height="18"/><rect x="220" y="188" width="18" height="18"/>
+    <rect x="162" y="218" width="18" height="18" class="lit"/><rect x="220" y="218" width="18" height="18"/>
+    <rect x="190" y="240" width="20" height="30"/>
+    <rect x="278" y="152" width="92" height="118"/>
+    <rect x="294" y="168" width="20" height="20"/><rect x="330" y="168" width="20" height="20"/>
+    <rect x="294" y="200" width="20" height="20" class="lit"/><rect x="330" y="200" width="20" height="20"/>
+    <rect x="294" y="232" width="20" height="20"/><rect x="330" y="232" width="20" height="20"/>
+    <line x1="12" y1="270" x2="388" y2="270"/>
+  </svg>
+</div>
+
+<main class="bio-wrap">
+  <header class="bio-head">
+    <div class="bio-avatar rise"><img src="https://d1yei2z3i6k35z.cloudfront.net/10740846/6776af1eb6d01_IMG_2580copie.jpg" alt="Mattéo Pinsault" width="112" height="112" fetchpriority="high"></div>
+    <h1 class="rise" data-d="1">Mattéo Pinsault</h1>
+    <p class="bio-tag rise" data-d="1">Investisseur immobilier à Toulouse</p>
+    <ul class="bio-proof rise" data-d="2"><li>18 lots</li><li>11 prêts</li><li>Premier achat à 18 ans</li></ul>
+  </header>
+
+  <button type="button" class="story-card rise" data-d="2" data-story-open aria-haspopup="dialog" aria-controls="story-modal">
+    <span class="story-thumb"><img src="assets/video/mon-histoire-poster.jpg" alt="" width="76" height="135" loading="eager"><span class="story-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></svg></span></span>
+    <span><span class="story-eyebrow">Vidéo · 1 min 32</span><span class="story-title">Mon histoire</span><span class="story-sub">Qui je suis, et pourquoi j'ai créé le club.</span></span>
+    <span class="story-arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+  </button>
+
+  <p class="bio-intro rise" data-d="3">Deux façons d'avancer avec moi. Choisis la tienne.</p>
+
+  <nav class="doors" aria-label="Choisir une porte d'entrée">
+    <a class="door door--club tilt rise" data-d="4" data-tilt-max="4" href="index.html">
+      <span class="door-eyebrow">Communauté privée</span>
+      <span class="door-title">Rejoindre le Club IMMO Élite</span>
+      <span class="door-text">La formation complète de 70 heures, un live avec moi chaque semaine, et un verdict chiffré sur chaque annonce que tu postes.</span>
+      <span class="door-meta">97 €/mois · 12 mois d'engagement</span>
+      <span class="door-arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+      <span class="door-line" aria-hidden="true"></span>
+    </a>
+    <a class="door door--call tilt rise" data-d="5" data-tilt-max="4" href="https://calendly.com/immoeliteappel/appel-decouverte-30-min" data-booking rel="noopener">
+      <span class="door-eyebrow">30 minutes · offert</span>
+      <span class="door-title">Réserver mon appel découverte</span>
+      <span class="door-text">On regarde ta situation en visio. Tu repars avec ta capacité d'emprunt chiffrée et les 2 ou 3 choses qui te bloquent. Même si on ne travaille jamais ensemble.</span>
+      <span class="door-meta">Créneau à choisir sur Calendly</span>
+      <span class="door-arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
+      <span class="door-line" aria-hidden="true"></span>
+    </a>
+  </nav>
+
+  <p class="bio-story rise" data-d="5">Tu veux tout le détail du club, de la formation et de mon parcours ? <a href="index.html">Voir la page complète</a>.</p>
+
+  <footer class="bio-foot rise" data-d="5">
+    <div class="bio-social">
+      <a href="https://www.youtube.com/@Matt%C3%A9oPinsault" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M23 7.1a3 3 0 0 0-2.1-2.1C19 4.5 12 4.5 12 4.5s-7 0-8.9.5A3 3 0 0 0 1 7.1 31 31 0 0 0 .5 12a31 31 0 0 0 .5 4.9 3 3 0 0 0 2.1 2.1c1.9.5 8.9.5 8.9.5s7 0 8.9-.5a3 3 0 0 0 2.1-2.1 31 31 0 0 0 .5-4.9 31 31 0 0 0-.5-4.9zM9.8 15.5v-7l6 3.5z"/></svg>YouTube</a>
+      <a href="https://www.instagram.com/matteo_pinsault/" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M12 7.3a4.7 4.7 0 1 0 0 9.4 4.7 4.7 0 0 0 0-9.4zm0 7.7a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm5.9-7.9a1.1 1.1 0 1 1-2.2 0 1.1 1.1 0 0 1 2.2 0zM21 7.1c-.1-1.5-.4-2.8-1.5-3.9S17.1 1.8 15.6 1.7C14 1.6 10 1.6 8.4 1.7 6.9 1.8 5.6 2.1 4.5 3.2S3.1 5.6 3 7.1c-.1 1.5-.1 6.2 0 7.8.1 1.5.4 2.8 1.5 3.9s2.4 1.4 3.9 1.5c1.6.1 6.3.1 7.8 0 1.5-.1 2.8-.4 3.9-1.5s1.4-2.4 1.5-3.9c.1-1.6.1-6.3 0-7.8zm-2 9.5a3 3 0 0 1-1.7 1.7c-1.2.5-4 .4-5.3.4s-4.1.1-5.3-.4a3 3 0 0 1-1.7-1.7c-.5-1.2-.4-4-.4-5.3s-.1-4.1.4-5.3A3 3 0 0 1 6.7 3.9c1.2-.5 4-.4 5.3-.4s4.1-.1 5.3.4A3 3 0 0 1 19 5.6c.5 1.2.4 4 .4 5.3s.1 4.1-.4 5.3z"/></svg>Instagram</a>
+    </div>
+    <div class="bio-legal">
+      <a href="mentions-legales.html">Mentions légales</a>
+      <a href="confidentialite.html">Confidentialité</a>
+      <button type="button" data-cookie-settings>Cookies</button>
+    </div>
+    <p>Les résultats dépendent de la situation de chacun. Aucun résultat n'est garanti.</p>
+  </footer>
+</main>
+
+<div class="story-modal" id="story-modal" role="dialog" aria-modal="true" aria-label="Vidéo : Mon histoire" aria-hidden="true">
+  <button type="button" class="story-close" data-story-close aria-label="Fermer la vidéo"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  <div class="story-player" id="story-player"></div>
+  <span class="story-caption">Mon histoire · Mattéo Pinsault · 1 min 32</span>
+</div>
+
+<div class="cookie" id="cookie" role="dialog" aria-live="polite" aria-label="Gestion des cookies">
+  <h4>Cookies</h4>
+  <p>J'utilise le Pixel Meta pour mesurer l'audience de cette page et mes publicités. Rien n'est déposé tant que tu n'as pas choisi. <a href="confidentialite.html">En savoir plus</a>.</p>
+  <div class="cookie-actions">
+    <button type="button" class="btn btn--ghost" data-consent="deny">Refuser</button>
+    <button type="button" class="btn btn--gold" data-consent="grant">Accepter</button>
+  </div>
+</div>
+
+<script src="assets/js/config.js"></script>
+<script src="assets/js/consent.js"></script>
+<script>
+  (function () {
+    var cfg = window.IE_CONFIG || {};
+    var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    /* Lien Calendly depuis la configuration (une seule source de vérité) */
+    document.querySelectorAll("[data-booking]").forEach(function (a) {
+      if (cfg.bookingUrl) a.href = cfg.bookingUrl;
+      a.addEventListener("click", function () { window.IEConsent && window.IEConsent.track("Lead", { content_name: "Appel découverte", source: "liens" }); });
+    });
+    document.querySelector(".door--club").addEventListener("click", function () { window.IEConsent && window.IEConsent.track("ViewContent", { content_name: "Club IMMO Élite", source: "liens" }); });
+
+    /* Lecteur vidéo plein écran */
+    var modal = document.getElementById("story-modal");
+    var player = document.getElementById("story-player");
+    var vcfg = cfg.video || {};
+    var video = null;
+    function openStory() {
+      if (!modal || !player) return;
+      if (!video) {
+        var small = window.matchMedia("(max-width: 720px)").matches;
+        var src = (small && vcfg.mp4Mobile) || vcfg.mp4 || vcfg.mp4Mobile;
+        if (!src) { location.href = "index.html#hero"; return; }
+        video = document.createElement("video");
+        video.setAttribute("playsinline", ""); video.setAttribute("webkit-playsinline", "");
+        video.controls = true; video.preload = "auto";
+        if (vcfg.poster) video.poster = vcfg.poster;
+        video.src = src;
+        video.addEventListener("ended", closeStory);
+        player.appendChild(video);
+      }
+      modal.classList.add("is-open"); modal.setAttribute("aria-hidden", "false");
+      document.body.classList.add("has-modal");
+      var p = video.play(); if (p && p.catch) p.catch(function () {});
+      window.IEConsent && window.IEConsent.track("ViewContent", { content_name: "Vidéo Mon histoire", content_type: "video", source: "liens" });
+    }
+    function closeStory() {
+      if (!modal) return;
+      modal.classList.remove("is-open"); modal.setAttribute("aria-hidden", "true");
+      document.body.classList.remove("has-modal");
+      if (video) video.pause();
+    }
+    document.querySelectorAll("[data-story-open]").forEach(function (b) { b.addEventListener("click", openStory); });
+    document.querySelectorAll("[data-story-close]").forEach(function (b) { b.addEventListener("click", closeStory); });
+    if (modal) modal.addEventListener("click", function (e) { if (e.target === modal) closeStory(); });
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeStory(); });
+
+    /* Tracé de l'illustration */
+    var art = document.getElementById("bio-art");
+    if (art && !reduced) {
+      var shapes = art.querySelectorAll("rect, polyline, line");
+      shapes.forEach(function (s, i) {
+        var len = 0; try { len = s.getTotalLength(); } catch (e) { len = 300; }
+        s.style.strokeDasharray = len; s.style.strokeDashoffset = len;
+        s.style.transition = "stroke-dashoffset 1.4s cubic-bezier(.4,0,.2,1) " + (200 + i * 30) + "ms";
+      });
+      requestAnimationFrame(function () { requestAnimationFrame(function () { shapes.forEach(function (s) { s.style.strokeDashoffset = "0"; }); }); });
+    }
+
+    /* Tilt 3D sur pointeur précis */
+    if (window.matchMedia("(hover: hover) and (pointer: fine)").matches && !reduced) {
+      document.querySelectorAll(".tilt").forEach(function (card) {
+        var max = parseFloat(card.getAttribute("data-tilt-max")) || 4, raf = null, rx = 0, ry = 0;
+        function apply() { card.style.transform = "translateY(-4px) rotateX(" + rx + "deg) rotateY(" + ry + "deg)"; raf = null; }
+        card.addEventListener("pointermove", function (e) {
+          var r = card.getBoundingClientRect();
+          ry = ((e.clientX - r.left) / r.width - 0.5) * max * 2; rx = -((e.clientY - r.top) / r.height - 0.5) * max * 2;
+          if (!raf) raf = requestAnimationFrame(apply);
+        });
+        card.addEventListener("pointerenter", function () { card.style.transition = "transform .15s ease, box-shadow .6s ease, border-color .4s ease, background-color .3s ease"; });
+        card.addEventListener("pointerleave", function () { card.style.transition = ""; card.style.transform = ""; });
+      });
+    }
+  })();
+</script>
+</body>
+</html>

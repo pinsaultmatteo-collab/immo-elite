@@ -9,6 +9,7 @@ Construit à partir du « Brief Claude Code — Page de vente Club IMMO ÉLITE �
 | --- | --- |
 | `index.html` | La page de vente (15 sections, barre fixe mobile, bandeau cookies) |
 | `merci.html` | Page de remerciement après paiement (3 étapes, événement Purchase une seule fois) |
+| `liens.html` | Page « lien en bio » Instagram : deux portes, le club et l'appel Calendly. Adresse publique : `/liens` |
 | `mentions-legales.html`, `cgv.html`, `confidentialite.html` | Pages légales, champs encadrés à compléter, CGV à faire valider par un avocat |
 | `assets/css/styles.css` | Charte IMMO Élite, mobile d'abord (375 px), effets 3D / parallaxe / survol |
 | `assets/js/config.js` | **Le seul fichier à remplir** : lien de réservation, ID Vimeo, portail Stripe… |
@@ -21,14 +22,14 @@ Construit à partir du « Brief Claude Code — Page de vente Club IMMO ÉLITE �
 ## 1. Ce que Mattéo doit fournir (ouvrir `assets/js/config.js`)
 
 ```js
-bookingUrl: ""        // lien de réservation de l'appel offert (Calendly, Cal.com…)
+bookingUrl: "https://calendly.com/immoeliteappel/appel-decouverte-30-min"  // appel découverte
 vimeoId: ""           // ID de la vidéo verticale de présentation (ex. "1192515116")
 portalUrl: ""         // lien de connexion au portail client Stripe
 checkoutFallbackUrl: "" // facultatif : Payment Link Stripe si la fonction serveur n'est pas déployée
 showTestimonials: true  // false si les 4 témoignages ne sont pas confirmés
 ```
 
-Tant que `bookingUrl` est vide, les boutons « appel offert » ouvrent un e-mail pré-rempli vers contact@immoelite-formation.fr.
+Le lien Calendly de l'appel découverte est branché sur tous les boutons « appel offert » du site et sur la page `/liens`.
 La vidéo « Mon histoire » est intégrée au cadre du haut de page (voir la section Vidéo ci-dessous). Si tu la mets un jour sur Vimeo, il suffit de remplir `vimeoId` : Vimeo prend alors le dessus.
 
 ### Vidéo
@@ -129,7 +130,7 @@ Pour l'instant, l'invitation se fait à la main depuis les notifications de paie
 
 1. Hébergement et sous-domaine : proposition `club.immoelite-formation.fr` sur Vercel.
 2. Identifiant du prix Stripe, et confirmation que 97 € est bien TTC.
-3. Lien de réservation de l'appel offert.
+3. ~~Lien de réservation de l'appel offert.~~ Branché : Calendly, appel découverte 30 min.
 4. Photos en haute définition (la vidéo « Mon histoire » est intégrée ; un lien Vimeo reste possible plus tard).
 5. Les 4 témoignages (Sophie C., Jean-Philippe M., Thomas L., Aurélie M.) sont-ils réels et autorisés ? Ils sont affichés par défaut car déjà en ligne sur l'ancienne page ; `showTestimonials: false` les retire.
 6. Garantie de remboursement volontaire : aucune n'est mentionnée sur la page pour l'instant.
