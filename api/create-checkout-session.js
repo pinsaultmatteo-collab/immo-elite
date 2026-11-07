@@ -43,6 +43,43 @@ async function resolveTaxRate(stripe) {
   return cachedTaxRate;
 }
 
+/**
+ * Paramètres de la session Checkout, partagés entre le site et le script d'achat de test
+ * (scripts/test-achat-gratuit.mjs), pour que le test reproduise exactement le vrai parcours.
+ */
+export function checkoutParams({ base, priceId, taxRate, source = "page" }) {
+  return {
+    mode: "subscription",
+    locale: "fr",
+    line_items: [{ price: priceId, quantity: 1 }],
+    // Case CGV obligatoire + texte personnalisé (renonciation au droit de rétractation)
+    consent_collection: { terms_of_service: "required" },
+    custom_text: {
+      terms_of_service_acceptance: { message: TERMS_TEXT },
+      submit: { message: "97 € par mois TTC. Engagement de 12 mois, puis résiliable à tout moment." },
+    },
+    billing_address_collection: "auto",
+    allow_promotion_codes: false,
+    // Coordonnées demandées en plus de l'e-mail : téléphone (obligatoire), prénom, nom, société (facultative).
+    // Stripe limite Checkout à 3 champs personnalisés. Sans contrainte de longueur : pas de mention « 1-60 caractères ».
+    phone_number_collection: { enabled: true },
+    custom_fields: [
+      { key: "prenom", label: { type: "custom", custom: "Prénom" }, type: "text" },
+      { key: "nom", label: { type: "custom", custom: "Nom" }, type: "text" },
+      { key: "societe", label: { type: "custom", custom: "Société" }, type: "text", optional: true },
+    ],
+    subscription_data: {
+      description: "Club IMMO Élite — abonnement mensuel, engagement 12 mois",
+      metadata: { product: "club-immo-elite", commitment_months: "12", source },
+      // TVA 20 % incluse dans les 97 € : les factures affichent HT, taux et montant de TVA
+      ...(taxRate ? { default_tax_rates: [taxRate] } : {}),
+    },
+    metadata: { product: "club-immo-elite", source },
+    success_url: `${base}/merci.html?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${base}/#offre`,
+  };
+}
+
 export async function POST(request) {
   const secret = process.env.STRIPE_SECRET_KEY;
   const priceId = process.env.STRIPE_PRICE_ID;
@@ -65,36 +102,7 @@ export async function POST(request) {
 
   try {
     const taxRate = await resolveTaxRate(stripe);
-    const session = await stripe.checkout.sessions.create({
-      mode: "subscription",
-      locale: "fr",
-      line_items: [{ price: priceId, quantity: 1 }],
-      // Case CGV obligatoire + texte personnalisé (renonciation au droit de rétractation)
-      consent_collection: { terms_of_service: "required" },
-      custom_text: {
-        terms_of_service_acceptance: { message: TERMS_TEXT },
-        submit: { message: "97 € par mois TTC. Engagement de 12 mois, puis résiliable à tout moment." },
-      },
-      billing_address_collection: "auto",
-      allow_promotion_codes: false,
-      // Coordonnées demandées en plus de l'e-mail : téléphone (obligatoire), prénom, nom, société (facultative).
-      // Stripe limite Checkout à 3 champs personnalisés. Sans contrainte de longueur : pas de mention « 1-60 caractères ».
-      phone_number_collection: { enabled: true },
-      custom_fields: [
-        { key: "prenom", label: { type: "custom", custom: "Prénom" }, type: "text" },
-        { key: "nom", label: { type: "custom", custom: "Nom" }, type: "text" },
-        { key: "societe", label: { type: "custom", custom: "Société" }, type: "text", optional: true },
-      ],
-      subscription_data: {
-        description: "Club IMMO Élite — abonnement mensuel, engagement 12 mois",
-        metadata: { product: "club-immo-elite", commitment_months: "12", source },
-        // TVA 20 % incluse dans les 97 € : les factures affichent HT, taux et montant de TVA
-        ...(taxRate ? { default_tax_rates: [taxRate] } : {}),
-      },
-      metadata: { product: "club-immo-elite", source },
-      success_url: `${base}/merci.html?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${base}/#offre`,
-    });
+    const session = await stripe.checkout.sessions.create(checkoutParams({ base, priceId, taxRate, source }));
     return json({ url: session.url });
   } catch (err) {
     console.error("[checkout] Stripe error:", err?.message || err);
