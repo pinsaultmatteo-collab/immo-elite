@@ -116,7 +116,7 @@ Horloges de test Stripe, rien n'est facturé. Le script vérifie qu'un webhook r
 
 Paiement de bout en bout sur le site : bouton « Rejoindre le club », carte `4242 4242 4242 4242`, date future, n'importe quel code. Vérifier l'arrivée sur `/merci`, puis dans Stripe l'abonnement avec son calendrier de 12 mois et la métadonnée `commitment_end`.
 
-- [ ] Un paiement réussi mène à la page de remerciement, et l'événement Purchase part une seule fois
+- [x] Un paiement réussi mène à la page de remerciement et déclenche l'e-mail de bienvenue (testé en réel le 7 novembre 2026 avec `scripts/test-achat-gratuit.mjs` : 7/7 contrôles)
 - [ ] Le webhook crée un seul calendrier de 12 mois, même reçu deux fois (`stripe-test-clock.mjs`, test A)
 - [ ] Passé 12 mois, l'abonnement continue au mois le mois (test B)
 - [ ] Une résiliation demandée au mois 3 ne coupe pas l'engagement (test C, puis portail à la main avec `--keep`). Si elle le coupe : décision à prendre avant la production
@@ -124,6 +124,16 @@ Paiement de bout en bout sur le site : bouton « Rejoindre le club », carte `42
 - [ ] Tout se lit et se clique à 375 px de large
 
 Le webhook écrit aussi une **alerte dans les logs Vercel** (`ALERTE engagement`) si un abonné programme un arrêt avant la fin de ses 12 mois.
+
+### Achat de test à 0 € (en réel, sans rien payer)
+
+```bash
+node scripts/test-achat-gratuit.mjs                      # lien privé, premier mois offert, 2 h, usage unique
+node scripts/test-achat-gratuit.mjs --verifier cs_live_…  # engagement, TVA, carte, fiche client, facture, e-mail
+node scripts/test-achat-gratuit.mjs --nettoyer cs_live_…  # annule l'abonnement de test sans prorata, supprime le coupon
+```
+
+Pendant le test, refuser les cookies sur la page merci, sinon le Pixel Meta compte un faux achat de 97 €.
 
 ### Passage en production
 

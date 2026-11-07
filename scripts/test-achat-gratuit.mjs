@@ -60,7 +60,7 @@ if (mode === "verify") {
   const check = (name, pass, detail) => { results.push(pass); (pass ? ok : warn)(`${name}${detail ? " : " + detail : ""}`); };
   const sub = await stripe.subscriptions.retrieve(session.subscription, { expand: ["schedule", "latest_invoice", "customer"] });
   const sched = sub.schedule;
-  check("Calendrier d'engagement attaché", Boolean(sched), sched ? `${sched.phases[0].iterations ?? ""} mois, fin ${day(sched.phases[0].end_date)}, puis ${sched.end_behavior}` : "absent");
+  check("Calendrier d'engagement attaché", Boolean(sched), sched ? `${Math.round((sched.phases[0].end_date - sched.phases[0].start_date) / (30.44 * 86400))} mois, fin ${day(sched.phases[0].end_date)}, puis ${sched.end_behavior}` : "absent");
   check("Date de fin d'engagement notée", Boolean(sub.metadata.commitment_end), day(Number(sub.metadata.commitment_end)));
   check("TVA sur l'abonnement", (sub.default_tax_rates || []).length > 0 || (sched?.phases[0].default_tax_rates || []).length > 0);
   check("Moyen de paiement conservé pour le mois 2", Boolean(sub.default_payment_method || sched?.phases[0].default_payment_method));
