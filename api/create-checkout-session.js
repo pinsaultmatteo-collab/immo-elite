@@ -61,7 +61,14 @@ export async function POST(request) {
       },
       billing_address_collection: "auto",
       allow_promotion_codes: false,
-      phone_number_collection: { enabled: false },
+      // Coordonnées demandées en plus de l'e-mail : téléphone (obligatoire), prénom, nom, société (facultative).
+      // Stripe limite Checkout à 3 champs personnalisés.
+      phone_number_collection: { enabled: true },
+      custom_fields: [
+        { key: "prenom", label: { type: "custom", custom: "Prénom" }, type: "text", text: { minimum_length: 1, maximum_length: 60 } },
+        { key: "nom", label: { type: "custom", custom: "Nom" }, type: "text", text: { minimum_length: 1, maximum_length: 80 } },
+        { key: "societe", label: { type: "custom", custom: "Société" }, type: "text", optional: true, text: { maximum_length: 120 } },
+      ],
       subscription_data: {
         description: "Club IMMO Élite — abonnement mensuel, engagement 12 mois",
         metadata: { product: "club-immo-elite", commitment_months: "12", source },

@@ -75,10 +75,38 @@ export async function attachCommitment(stripe, subscriptionId) {
   return { skipped: false, scheduleId: schedule.id, commitmentEnd };
 }
 
-async function notifySkoolInvite({ email, name, customerId, subscriptionId }) {
+/** Lit un champ personnalisé de la session Checkout (prenom, nom, societe). */
+function customField(session, key) {
+  const f = (session.custom_fields || []).find((x) => x.key === key);
+  return (f?.text?.value || "").trim();
+}
+
+/**
+ * Recopie prénom, nom, téléphone et société sur la fiche client Stripe.
+ * La société apparaît aussi sur les factures. Idempotent. Exporté pour les tests.
+ */
+export async function saveCustomerDetails(stripe, session) {
+  const customerId = typeof session.customer === "string" ? session.customer : session.customer?.id;
+  const prenom = customField(session, "prenom");
+  const nom = customField(session, "nom");
+  const societe = customField(session, "societe");
+  const phone = session.customer_details?.phone || "";
+  const details = { prenom, nom, societe, phone, email: session.customer_details?.email || session.customer_email || "" };
+  if (!customerId) return { skipped: true, details };
+
+  const update = { metadata: { prenom, nom, societe } };
+  const fullName = [prenom, nom].filter(Boolean).join(" ");
+  if (fullName) update.name = fullName;
+  if (phone) update.phone = phone;
+  update.invoice_settings = { custom_fields: societe ? [{ name: "Société", value: societe.slice(0, 140) }] : "" };
+  await stripe.customers.update(customerId, update);
+  return { skipped: false, customerId, details };
+}
+
+async function notifySkoolInvite({ email, name, phone, societe, customerId, subscriptionId }) {
   const url = process.env.SKOOL_INVITE_WEBHOOK_URL;
   if (!url) {
-    console.log(`[skool] Invitation à envoyer à la main : ${email} (client ${customerId}, abonnement ${subscriptionId})`);
+    console.log(`[skool] Invitation à envoyer à la main : ${name || "(nom absent)"} <${email}>${phone ? " · " + phone : ""}${societe ? " · " + societe : ""} (client ${customerId}, abonnement ${subscriptionId})`);
     return;
   }
   // Emplacement pour l'automatisation : Zapier → action Skool « Invite Member ».
@@ -86,7 +114,7 @@ async function notifySkoolInvite({ email, name, customerId, subscriptionId }) {
     await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, name, customerId, subscriptionId, group: "Club IMMO ÉLITE" }),
+      body: JSON.stringify({ email, name, phone, societe, customerId, subscriptionId, group: "Club IMMO ÉLITE" }),
     });
   } catch (err) {
     console.error("[skool] Échec de l'appel d'automatisation :", err?.message || err);
@@ -118,10 +146,22 @@ export async function POST(request) {
         const subscriptionId = typeof session.subscription === "string" ? session.subscription : session.subscription.id;
         const result = await attachCommitment(stripe, subscriptionId);
         console.log(`[webhook] Engagement 12 mois — abonnement ${subscriptionId} :`, result);
+
+        // Coordonnées sur la fiche client : une erreur ici ne doit pas bloquer l'engagement
+        let details = {};
+        try {
+          const saved = await saveCustomerDetails(stripe, session);
+          details = saved.details;
+        } catch (err) {
+          console.error(`[webhook] Fiche client non mise à jour (${subscriptionId}) :`, err?.message || err);
+        }
+
         if (!result.skipped) {
           await notifySkoolInvite({
-            email: session.customer_details?.email || session.customer_email,
-            name: session.customer_details?.name || "",
+            email: details.email || session.customer_details?.email || session.customer_email,
+            name: [details.prenom, details.nom].filter(Boolean).join(" ") || session.customer_details?.name || "",
+            phone: details.phone || session.customer_details?.phone || "",
+            societe: details.societe || "",
             customerId: typeof session.customer === "string" ? session.customer : session.customer?.id,
             subscriptionId,
           });
