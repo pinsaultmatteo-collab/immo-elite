@@ -12,11 +12,14 @@
  *
  * Variables d'environnement requises :
  *   STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET (whsec_…)
+ * E-mail de bienvenue (voir api/_lib/welcome-email.js) :
+ *   SKOOL_GROUP_URL, SMTP_USER, SMTP_PASS, MAIL_BCC (facultatif)
  * Optionnelle :
  *   SKOOL_INVITE_WEBHOOK_URL  — URL d'un Zap (Zapier « Catch Hook ») qui déclenche
  *                               l'action Skool « Invite Member ». Vide : invitation à la main.
  */
 import Stripe from "stripe";
+import { sendWelcomeIfNeeded } from "./_lib/welcome-email.js";
 
 const COMMITMENT_ITERATIONS = 12;
 
@@ -158,6 +161,18 @@ export async function POST(request) {
         } catch (err) {
           console.error(`[webhook] Fiche client non mise à jour (${subscriptionId}) :`, err?.message || err);
         }
+
+        // E-mail de bienvenue : facture jointe + lien de demande d'accès Skool.
+        // Envoyé une seule fois (métadonnée de l'abonnement). Un échec lève une erreur :
+        // le webhook répond 500, Stripe réessaie, et l'e-mail part au nouvel essai.
+        const welcome = await sendWelcomeIfNeeded(stripe, {
+          subscriptionId,
+          details: {
+            prenom: details.prenom || customField(session, "prenom"),
+            email: details.email || session.customer_details?.email || session.customer_email || "",
+          },
+        });
+        console.log(`[email] Bienvenue — abonnement ${subscriptionId} :`, welcome);
 
         if (!result.skipped) {
           await notifySkoolInvite({

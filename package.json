@@ -4,13 +4,16 @@
   "private": true,
   "description": "Page de vente du Club IMMO Élite : site statique + deux fonctions serveur Stripe (Vercel).",
   "type": "module",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "vercel dev",
     "serve": "python3 -m http.server 4173",
     "deploy": "vercel --prod"
   },
   "dependencies": {
+    "nodemailer": "^10.3.1",
     "stripe": "^16.12.0"
   }
 }

@@ -143,9 +143,26 @@ npx vercel
 
 Puis dans Vercel : ajouter le domaine `club.immoelite-formation.fr` (enregistrement CNAME chez le registrar vers `cname.vercel-dns.com`). Les fonctions utilisent le runtime Node.js 20 avec la signature Web standard (`export async function POST(request)`).
 
-## 5. Invitation Skool
+## 5. E-mail de bienvenue et accès Skool
 
-Pour l'instant, l'invitation se fait à la main depuis les notifications de paiement Stripe (le webhook écrit l'e-mail du client dans les logs Vercel). Pour automatiser plus tard : créer un Zap « Webhooks by Zapier (Catch Hook) → Skool (Invite Member) » et coller l'URL du hook dans `SKOOL_INVITE_WEBHOOK_URL`.
+Juste après chaque paiement, le webhook envoie au client un e-mail avec **sa facture Stripe en pièce jointe** (PDF, avec lien de secours si le PDF n'est pas encore prêt) et un bouton **« Demander mon accès au club »** vers le groupe Skool. Le client fait sa demande sur Skool avec la même adresse e-mail que son paiement. Mattéo la valide sous 24 h ouvrées. L'e-mail ne part qu'une fois par abonnement (métadonnée `welcome_email_sent_at`). En cas d'échec d'envoi, le webhook répond 500 et Stripe réessaie.
+
+L'envoi passe par le serveur SMTP d'OVH, depuis la boîte `contact@immoelite-formation.fr` : c'est le seul expéditeur autorisé par le SPF du domaine, ce qui évite les courriers indésirables. Variables à ajouter dans Vercel (Production), puis Redeploy :
+
+| Variable | Valeur |
+| --- | --- |
+| `SKOOL_GROUP_URL` | Lien public du groupe Skool, où l'on clique « Demander à rejoindre » |
+| `SMTP_USER` | `contact@immoelite-formation.fr` |
+| `SMTP_PASS` | Mot de passe de cette boîte OVH (Sensitive) |
+| `MAIL_BCC` | Facultatif : ton adresse, pour recevoir une copie de chaque e-mail et savoir qui valider |
+
+Facultatives : `SMTP_HOST` (défaut `ssl0.ovh.net`), `SMTP_PORT` (défaut `465`), `MAIL_FROM`, `PORTAL_LOGIN_URL`.
+
+Tant que ces variables manquent, rien ne casse : le paiement et l'engagement fonctionnent, l'e-mail n'est simplement pas envoyé (ligne `[email] Envoi désactivé` dans les logs Vercel).
+
+Côté Skool : groupe privé avec demandes d'adhésion activées, et une question d'adhésion « Quelle adresse e-mail as-tu utilisée pour le paiement ? » pour retrouver chaque membre dans Stripe. Pour la délivrabilité, activer aussi DKIM sur la messagerie OVH (Web Cloud > Emails > DKIM).
+
+Les logs Vercel gardent aussi une ligne `[skool]` par nouvel abonné (nom, e-mail, téléphone, société). `SKOOL_INVITE_WEBHOOK_URL` reste disponible pour brancher plus tard une automatisation Zapier.
 
 ## 6. Questions restées ouvertes (brief, dernière section)
 
@@ -157,7 +174,7 @@ Pour l'instant, l'invitation se fait à la main depuis les notifications de paie
 6. Garantie de remboursement volontaire : aucune n'est mentionnée sur la page pour l'instant.
 7. Société qui vend l'abonnement (mentions légales, CGV, factures).
 8. Médiateur de la consommation à inscrire dans les CGV.
-9. Délai d'invitation Skool affiché : « sous 24 h ouvrées » (sections « Après le paiement » et page merci). À confirmer ou à modifier.
+9. Délai de validation de l'accès Skool affiché : « sous 24 h ouvrées » (page de vente, page merci, e-mail, CGV).
 
 ## Règles respectées
 
