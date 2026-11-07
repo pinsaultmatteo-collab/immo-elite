@@ -28,6 +28,21 @@ function siteUrl() {
   return (raw.startsWith("http") ? raw : `https://${raw}`).replace(/\/$/, "");
 }
 
+/**
+ * Taux de TVA 20 % inclus : STRIPE_TAX_RATE_ID s'il est défini, sinon le taux créé par
+ * scripts/stripe-setup.mjs (métadonnée app=club-immo-elite). Mis en cache entre deux appels.
+ */
+let cachedTaxRate;
+async function resolveTaxRate(stripe) {
+  if (process.env.STRIPE_TAX_RATE_ID) return process.env.STRIPE_TAX_RATE_ID;
+  if (cachedTaxRate !== undefined) return cachedTaxRate;
+  const list = await stripe.taxRates.list({ active: true, limit: 100 });
+  const rate = list.data.find((t) => t.metadata?.app === "club-immo-elite" && t.percentage === 20 && t.inclusive);
+  cachedTaxRate = rate ? rate.id : null;
+  if (!rate) console.warn("[checkout] Aucun taux de TVA trouvé : les factures n'afficheront pas la TVA.");
+  return cachedTaxRate;
+}
+
 export async function POST(request) {
   const secret = process.env.STRIPE_SECRET_KEY;
   const priceId = process.env.STRIPE_PRICE_ID;
@@ -49,6 +64,7 @@ export async function POST(request) {
   const stripe = new Stripe(secret, { apiVersion: "2024-06-20" });
 
   try {
+    const taxRate = await resolveTaxRate(stripe);
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       locale: "fr",
@@ -72,6 +88,8 @@ export async function POST(request) {
       subscription_data: {
         description: "Club IMMO Élite — abonnement mensuel, engagement 12 mois",
         metadata: { product: "club-immo-elite", commitment_months: "12", source },
+        // TVA 20 % incluse dans les 97 € : les factures affichent HT, taux et montant de TVA
+        ...(taxRate ? { default_tax_rates: [taxRate] } : {}),
       },
       metadata: { product: "club-immo-elite", source },
       success_url: `${base}/merci.html?session_id={CHECKOUT_SESSION_ID}`,

@@ -5,11 +5,12 @@
  *
  * Idempotent : relançable sans créer de doublons.
  *  1. Produit « Club IMMO Élite » + prix récurrent 97 € TTC / mois (lookup_key club-immo-elite-mensuel)
+ *     et taux de TVA 20 % inclus (factures : HT, taux, TVA)
  *  2. Portail client : résiliation en ligne, factures, moyen de paiement, page de connexion
  *  3. Endpoint webhook https://club.immoelite-formation.fr/api/stripe-webhook
  *  4. Contrôle final : crée une vraie session Checkout via la fonction du site, puis l'expire
  *
- * Écrit STRIPE_PRICE_ID et STRIPE_WEBHOOK_SECRET dans .env.local, sans les afficher.
+ * Écrit STRIPE_PRICE_ID, STRIPE_TAX_RATE_ID et STRIPE_WEBHOOK_SECRET dans .env.local, sans afficher les secrets.
  */
 import Stripe from "stripe";
 import { loadEnv, writeEnv, requireTestKey, ok, warn, step } from "./_env.mjs";
@@ -50,6 +51,26 @@ if (price) {
   ok(`Produit ${product.id} et prix ${price.id} créés (97 € TTC / mois)`);
 }
 if (price.unit_amount !== 9700 || price.currency !== "eur" || price.recurring?.interval !== "month") warn("Le prix existant n'est pas 97 € / mois : vérifie-le dans le Dashboard.");
+
+/* 1 bis. TVA française 20 % incluse dans le prix */
+step("1 bis. TVA 20 % incluse");
+let taxRate = (await stripe.taxRates.list({ active: true, limit: 100 })).data.find((t) => t.metadata?.app === TAG.app && t.percentage === 20 && t.inclusive);
+if (taxRate) {
+  ok(`Taux de TVA existant ${taxRate.id} (${taxRate.percentage} %, inclus)`);
+} else {
+  taxRate = await stripe.taxRates.create({
+    display_name: "TVA",
+    description: "TVA France 20 %, incluse dans le prix",
+    percentage: 20,
+    inclusive: true,
+    country: "FR",
+    jurisdiction: "France",
+    tax_type: "vat",
+    metadata: TAG,
+  });
+  ok(`Taux de TVA ${taxRate.id} créé (20 %, inclus dans les 97 €)`);
+}
+writeEnv({ STRIPE_TAX_RATE_ID: taxRate.id });
 
 /* 2. Portail client */
 step("2. Portail client");
@@ -126,4 +147,4 @@ if (res.ok && body.url) {
   process.exitCode = 1;
 }
 
-console.log(`\nÀ copier dans Vercel > Settings > Environment Variables : STRIPE_SECRET_KEY, STRIPE_PRICE_ID, STRIPE_WEBHOOK_SECRET, SITE_URL (valeurs dans .env.local).`);
+console.log(`\nÀ copier dans Vercel > Settings > Environment Variables : STRIPE_SECRET_KEY, STRIPE_PRICE_ID, STRIPE_WEBHOOK_SECRET, SITE_URL (valeurs dans .env.local).\nSTRIPE_TAX_RATE_ID est facultatif : la fonction de paiement retrouve seule le taux de TVA.`);

@@ -98,7 +98,7 @@ npm install
 node scripts/stripe-setup.mjs
 ```
 
-Le script est relançable sans doublon. Il crée le produit et le prix de 97 € TTC par mois, configure le portail client (résiliation en ligne, factures, carte), crée l'endpoint webhook sur `https://club.immoelite-formation.fr/api/stripe-webhook`, puis crée une vraie session Checkout pour vérifier que Stripe accepte tout. Il écrit `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET` et `SITE_URL` dans `.env.local` sans les afficher, et affiche le **lien de connexion au portail client** à coller dans `assets/js/config.js` (`portalUrl`).
+Le script est relançable sans doublon. Il crée le produit et le prix de 97 € TTC par mois, le taux de TVA de 20 % inclus (factures : 80,83 € HT + 16,17 € de TVA), configure le portail client (résiliation en ligne, factures, carte), crée l'endpoint webhook sur `https://club.immoelite-formation.fr/api/stripe-webhook`, puis crée une vraie session Checkout pour vérifier que Stripe accepte tout. Il écrit `STRIPE_PRICE_ID`, `STRIPE_WEBHOOK_SECRET` et `SITE_URL` dans `.env.local` sans les afficher, et affiche le **lien de connexion au portail client** à coller dans `assets/js/config.js` (`portalUrl`).
 
 ### Dans Vercel
 
@@ -150,7 +150,7 @@ Pour l'instant, l'invitation se fait à la main depuis les notifications de paie
 ## 6. Questions restées ouvertes (brief, dernière section)
 
 1. ~~Hébergement et sous-domaine.~~ Réglé : Vercel, `club.immoelite-formation.fr` (CNAME OVH vers Vercel, HTTPS Let's Encrypt automatique). `www` reste sur systeme.io pour la masterclass.
-2. Identifiant du prix Stripe, et confirmation que 97 € est bien TTC.
+2. ~~Identifiant du prix Stripe, 97 € TTC.~~ Réglé : prix live créé, TVA 20 % incluse appliquée à chaque abonnement et conservée sur les 12 mois.
 3. ~~Lien de réservation de l'appel offert.~~ Branché : Calendly, appel découverte 30 min.
 4. Photos en haute définition (la vidéo « Mon histoire » est intégrée ; un lien Vimeo reste possible plus tard).
 5. Les 4 témoignages (Sophie C., Jean-Philippe M., Thomas L., Aurélie M.) sont-ils réels et autorisés ? Ils sont affichés par défaut car déjà en ligne sur l'ancienne page ; `showTestimonials: false` les retire.

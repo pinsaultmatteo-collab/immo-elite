@@ -40,8 +40,8 @@ export async function attachCommitment(stripe, subscriptionId) {
   const created = await stripe.subscriptionSchedules.create({ from_subscription: sub.id });
 
   // 2. Règle la phase courante sur 12 mois, puis libère l'abonnement.
-  //    Stripe retire les réglages omis d'une phase : on recopie explicitement
-  //    le moyen de paiement posé par Checkout, sinon le prélèvement du mois 2 peut échouer.
+  //    Stripe retire les réglages omis d'une phase : on recopie explicitement le moyen de
+  //    paiement et la TVA posés par Checkout, sinon le mois 2 peut échouer ou perdre la TVA.
   const currentPhase = created.phases[0];
   const items = currentPhase.items.map((it) => ({ price: typeof it.price === "string" ? it.price : it.price.id, quantity: it.quantity || 1 }));
   const paymentMethod = typeof sub.default_payment_method === "string" ? sub.default_payment_method : sub.default_payment_method?.id;
@@ -55,6 +55,9 @@ export async function attachCommitment(stripe, subscriptionId) {
   };
   if (paymentMethod) phase.default_payment_method = paymentMethod;
   if (sub.description) phase.description = sub.description;
+  // Même raison pour la TVA : sans ce report, les factures à partir du mois 2 perdraient la TVA
+  const taxRates = (sub.default_tax_rates || []).map((t) => (typeof t === "string" ? t : t.id));
+  if (taxRates.length) phase.default_tax_rates = taxRates;
 
   const schedule = await stripe.subscriptionSchedules.update(created.id, {
     end_behavior: "release",
