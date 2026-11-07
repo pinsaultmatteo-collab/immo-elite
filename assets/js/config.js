@@ -27,7 +27,7 @@ window.IE_CONFIG = {
   checkoutFallbackUrl: "",
 
   // Lien de connexion au portail client Stripe (Paramètres > Portail client).
-  portalUrl: "",
+  portalUrl: "https://billing.stripe.com/p/login/5kQ3cv8qv258388fH27EQ00",
 
   // Pixel Meta. Ne se charge qu'après consentement.
   pixelId: "958400803630500",
