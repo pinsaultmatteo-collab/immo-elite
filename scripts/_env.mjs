@@ -4,9 +4,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-export const ENV_FILE = path.join(ROOT, ".env.local");
+export const LIVE_ENV_FILE = path.join(ROOT, ".env.local");
+export const TEST_ENV_FILE = path.join(ROOT, ".env.test.local");
+// La clé de test vit dans un fichier séparé : elle ne remplace jamais la configuration réelle.
+export let ENV_FILE = LIVE_ENV_FILE;
 
-export function loadEnv() {
+export function loadEnv({ test = false } = {}) {
+  ENV_FILE = test ? TEST_ENV_FILE : LIVE_ENV_FILE;
   if (!fs.existsSync(ENV_FILE)) return {};
   const out = {};
   for (const line of fs.readFileSync(ENV_FILE, "utf8").split(/\r?\n/)) {
@@ -32,7 +36,7 @@ export function writeEnv(values) {
 export function requireTestKey({ allowLive = false } = {}) {
   const key = process.env.STRIPE_SECRET_KEY || "";
   if (!key) {
-    console.error("STRIPE_SECRET_KEY manquante. Colle ta clé secrète de TEST (sk_test_…) dans .env.local : STRIPE_SECRET_KEY=sk_test_…");
+    console.error(`STRIPE_SECRET_KEY manquante dans ${path.basename(ENV_FILE)}.`);
     process.exit(1);
   }
   if (key.startsWith("sk_live_") && !allowLive) {

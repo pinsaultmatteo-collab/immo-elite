@@ -1,5 +1,6 @@
 /**
  * Tests du brief, en mode test Stripe avec des horloges de test (rien n'est facturé).
+ * Clé de TEST dans .env.test.local (STRIPE_SECRET_KEY=sk_test_…), jamais la clé réelle.
  *   node scripts/stripe-test-clock.mjs           (lance les 3 tests puis supprime les horloges)
  *   node scripts/stripe-test-clock.mjs --keep    (garde les horloges pour inspection dans le Dashboard)
  *
@@ -13,12 +14,38 @@ import Stripe from "stripe";
 import { loadEnv, requireTestKey, ok, warn, step } from "./_env.mjs";
 import { attachCommitment } from "../api/stripe-webhook.js";
 
-loadEnv();
+loadEnv({ test: true }); // .env.test.local : jamais la clé réelle
 const key = requireTestKey();
-const priceId = process.env.STRIPE_PRICE_ID;
-if (!priceId) { console.error("STRIPE_PRICE_ID manquant : lance d'abord node scripts/stripe-setup.mjs"); process.exit(1); }
 const KEEP = process.argv.includes("--keep");
 const stripe = new Stripe(key, { apiVersion: "2024-06-20" });
+const TAG = { app: "club-immo-elite" };
+const SITE = (process.env.SITE_URL || "https://club.immoelite-formation.fr").replace(/\/$/, "");
+
+/* Mode test : mêmes objets qu'en réel (prix 97 € TTC, TVA 20 % incluse, portail), créés une fois */
+async function ensureTestSetup() {
+  let price = (await stripe.prices.list({ lookup_keys: ["club-immo-elite-mensuel"], active: true, limit: 1 })).data[0];
+  if (!price) {
+    const product = await stripe.products.create({ name: "Club IMMO Élite", metadata: TAG });
+    price = await stripe.prices.create({ product: product.id, currency: "eur", unit_amount: 9700, recurring: { interval: "month" }, tax_behavior: "inclusive", lookup_key: "club-immo-elite-mensuel", metadata: TAG });
+  }
+  let tax = (await stripe.taxRates.list({ active: true, limit: 100 })).data.find((t) => t.metadata?.app === TAG.app && t.percentage === 20 && t.inclusive);
+  if (!tax) tax = await stripe.taxRates.create({ display_name: "TVA", percentage: 20, inclusive: true, country: "FR", jurisdiction: "France", tax_type: "vat", metadata: TAG });
+  let portal = (await stripe.billingPortal.configurations.list({ limit: 100 })).data.find((c) => c.metadata?.app === TAG.app);
+  if (!portal) portal = await stripe.billingPortal.configurations.create({
+    business_profile: { headline: "Club IMMO Élite · engagement de 12 mois", privacy_policy_url: `${SITE}/confidentialite`, terms_of_service_url: `${SITE}/cgv` },
+    default_return_url: SITE + "/",
+    features: {
+      customer_update: { enabled: true, allowed_updates: ["email", "address"] },
+      invoice_history: { enabled: true },
+      payment_method_update: { enabled: true },
+      subscription_cancel: { enabled: true, mode: "at_period_end", proration_behavior: "none", cancellation_reason: { enabled: true, options: ["too_expensive", "unused", "other"] } },
+      subscription_update: { enabled: false },
+    },
+    metadata: TAG,
+  });
+  return { priceId: price.id, taxRateId: tax.id, portalId: portal.id };
+}
+const { priceId, taxRateId, portalId } = await ensureTestSetup();
 const results = [];
 const clocks = [];
 const fmt = (t) => new Date(t * 1000).toISOString().slice(0, 10);
@@ -32,7 +59,7 @@ async function newCustomer(label) {
   const customer = await stripe.customers.create({ test_clock: clock.id, email: `test-${label.toLowerCase()}@example.com`, name: `Test ${label}` });
   const pm = await stripe.paymentMethods.attach("pm_card_visa", { customer: customer.id });
   // Comme Checkout : le moyen de paiement est posé sur l'abonnement, pas sur le client
-  const sub = await stripe.subscriptions.create({ customer: customer.id, items: [{ price: priceId }], default_payment_method: pm.id, metadata: { product: "club-immo-elite", source: "test-clock" } });
+  const sub = await stripe.subscriptions.create({ customer: customer.id, items: [{ price: priceId }], default_payment_method: pm.id, default_tax_rates: [taxRateId], metadata: { product: "club-immo-elite", source: "test-clock" } });
   return { clock, customer, sub, start: now };
 }
 
@@ -75,8 +102,13 @@ try {
   const subB = await stripe.subscriptions.retrieve(a.sub.id);
   const schedB = await stripe.subscriptionSchedules.retrieve(r1.scheduleId);
   const inv = await paidInvoices(a.sub.id);
-  const passB = subB.status === "active" && !subB.schedule && schedB.status === "released" && inv.failed === 0 && inv.paid >= 14;
+  const all = (await stripe.invoices.list({ subscription: a.sub.id, limit: 100 })).data.sort((x, y) => x.created - y.created);
+  const after12 = all.filter((i) => i.period_end > addMonths(a.start, 12) - 86400 || i.created >= addMonths(a.start, 12));
+  const wrong = all.filter((i) => i.total !== 9700 || (i.tax ?? 0) !== 1617);
+  const passB = subB.status === "active" && !subB.schedule && schedB.status === "released" && inv.failed === 0 && inv.paid >= 14 && wrong.length === 0;
   (passB ? ok : warn)(`Abonnement ${subB.status}, calendrier ${schedB.status}, factures payées ${inv.paid}/${inv.total}, impayées ${inv.failed}`);
+  (wrong.length ? warn : ok)(`Montants : ${all.length - wrong.length}/${all.length} factures à 97,00 € TTC dont 16,17 € de TVA`);
+  ok(`Après le 12e mois : ${after12.length} prélèvement(s) mensuel(s) de plus, prochain le ${fmt(subB.current_period_end)}`);
   results.push(["B. Continue au mois le mois après 12 mois, chaque mois payé", passB]);
 
   /* ---------- C. Résiliation au mois 3 ---------- */
@@ -109,7 +141,7 @@ try {
     await attachCommitment(stripe, d.sub.id);
     await advance(d.clock.id, addMonths(d.start, 2) + 3600);
     await advance(d.clock.id, addMonths(d.start, 3) + 3600);
-    const ps = await stripe.billingPortal.sessions.create({ customer: d.customer.id, return_url: (process.env.SITE_URL || "https://club.immoelite-formation.fr") + "/" }).catch((e) => ({ error: e.message }));
+    const ps = await stripe.billingPortal.sessions.create({ customer: d.customer.id, configuration: portalId, return_url: SITE + "/" }).catch((e) => ({ error: e.message }));
     if (ps.url) ok(`Ouvre ce lien (valable quelques minutes), clique « Annuler l'abonnement » et regarde la date de fin annoncée : ${ps.url}`);
     else warn(`Portail indisponible pour ce client : ${ps.error}`);
     ok(`Puis vérifie l'abonnement ${d.sub.id} dans le Dashboard (mode test) : il doit rester actif jusqu'au ${fmt(addMonths(d.start, 12))}.`);
