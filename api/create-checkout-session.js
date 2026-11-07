@@ -52,6 +52,9 @@ export function checkoutParams({ base, priceId, taxRate, source = "page" }) {
     mode: "subscription",
     locale: "fr",
     line_items: [{ price: priceId, quantity: 1 }],
+    // Carte bancaire uniquement (Apple Pay et Google Pay restent proposés) : pas de Klarna
+    // pour un abonnement avec engagement. Ne modifie pas les réglages du compte Stripe.
+    payment_method_types: ["card"],
     // Case CGV obligatoire + texte personnalisé (renonciation au droit de rétractation)
     consent_collection: { terms_of_service: "required" },
     custom_text: {
