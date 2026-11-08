@@ -35,13 +35,14 @@ La vidéo « Mon histoire » est intégrée au cadre du haut de page (voir la se
 
 ### Vidéo
 
-Le fichier source (`MON HISTOIRE VF.2.MP4`, 2160×3840, 342 Mo) est trop lourd pour le web. Deux versions encodées en H.264 sont dans `assets/video/`, plus une image d'aperçu :
+Deux vidéos verticales, encodées en H.264 dans `assets/video/` à partir des fichiers 4K du vidéaste :
 
-| Fichier | Usage |
-| --- | --- |
-| `mon-histoire-1080.mp4` | Desktop et tablette (1080×1920, 26 Mo) |
-| `mon-histoire-720.mp4` | Écrans de 720 px et moins (720×1280, 16 Mo) |
-| `mon-histoire-poster.jpg` | Image affichée avant la lecture (la carte-titre « Mon histoire », premier plan du montage) |
+| Page | Vidéo | Fichiers |
+| --- | --- | --- |
+| Page de vente (haut de page) | « Le Club », 50 s (Drive : NOVEMBRE > LE CLUB > LE CLUB VF) | `le-club-1080.mp4` (15 Mo), `le-club-720.mp4` (10 Mo), `le-club-poster.jpg` |
+| Page de liens `/liens` | « Mon histoire », 1 min 32 | `mon-histoire-1080.mp4` (26 Mo), `mon-histoire-720.mp4` (16 Mo), `mon-histoire-poster.jpg` |
+
+Réglage dans `assets/js/config.js` : `video` pour la page de vente, `storyVideo` pour la page de liens. Les écrans de 720 px et moins reçoivent la version 720p.
 
 La lecture démarre au clic, avec le son, jamais toute seule. La vidéo se met en pause quand le cadre sort de l'écran. Pour ré-encoder après un nouveau montage :
 

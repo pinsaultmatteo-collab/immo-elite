@@ -8,13 +8,22 @@ window.IE_CONFIG = {
   bookingUrl: "https://calendly.com/immoeliteappel/appel-decouverte-30-min",
   bookingFallbackEmail: "contact@immoelite-formation.fr",
 
-  // Vidéo de présentation, hébergée sur le site (format vertical 9:16).
+  // Vidéo de la page de vente : présentation du club (format vertical 9:16, 50 s).
   // Si vimeoId est renseigné, c'est Vimeo qui est utilisé à la place.
   video: {
-    mp4: "assets/video/mon-histoire-1080.mp4",       // desktop
-    mp4Mobile: "assets/video/mon-histoire-720.mp4",  // écrans ≤ 720 px
+    mp4: "assets/video/le-club-1080.mp4",        // desktop
+    mp4Mobile: "assets/video/le-club-720.mp4",   // écrans ≤ 720 px
+    poster: "assets/video/le-club-poster.jpg",
+    title: "",
+    duration: "50 s"
+  },
+
+  // Vidéo de la page de liens Instagram (/liens) : « Mon histoire », 1 min 32.
+  storyVideo: {
+    mp4: "assets/video/mon-histoire-1080.mp4",
+    mp4Mobile: "assets/video/mon-histoire-720.mp4",
     poster: "assets/video/mon-histoire-poster.jpg",
-    title: "",            // laissé vide : la carte-titre « Mon histoire » est déjà dans l'image d'aperçu
+    title: "",
     duration: "1 min 32"
   },
 
