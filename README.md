@@ -117,9 +117,9 @@ Horloges de test Stripe, rien n'est facturé. Le script vérifie qu'un webhook r
 Paiement de bout en bout sur le site : bouton « Rejoindre le club », carte `4242 4242 4242 4242`, date future, n'importe quel code. Vérifier l'arrivée sur `/merci`, puis dans Stripe l'abonnement avec son calendrier de 12 mois et la métadonnée `commitment_end`.
 
 - [x] Un paiement réussi mène à la page de remerciement et déclenche l'e-mail de bienvenue (testé en réel le 7 novembre 2026 avec `scripts/test-achat-gratuit.mjs` : 7/7 contrôles)
-- [ ] Le webhook crée un seul calendrier de 12 mois, même reçu deux fois (`stripe-test-clock.mjs`, test A)
-- [ ] Passé 12 mois, l'abonnement continue au mois le mois (test B)
-- [ ] Une résiliation demandée au mois 3 ne coupe pas l'engagement (test C, puis portail à la main avec `--keep`). Si elle le coupe : décision à prendre avant la production
+- [x] Le webhook crée un seul calendrier de 12 mois, même reçu deux fois (test A, 8 novembre 2026)
+- [x] Passé 12 mois, l'abonnement continue au mois le mois (test B : 14 factures payées sur 13 mois, toutes à 97 € TTC dont 16,17 € de TVA)
+- [ ] **Une résiliation demandée au mois 3 coupe l'engagement (constaté le 8 novembre 2026).** L'API refuse de modifier un abonnement sous calendrier, mais le portail client libère le calendrier et programme l'arrêt en fin de mois : l'abonné de test est parti au mois 4 au lieu du mois 12. Décision à prendre avant d'envoyer du trafic.
 - [ ] Le Pixel reste muet tant que les cookies ne sont pas acceptés
 - [ ] Tout se lit et se clique à 375 px de large
 

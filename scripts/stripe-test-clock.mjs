@@ -3,6 +3,7 @@
  * Clé de TEST dans .env.test.local (STRIPE_SECRET_KEY=sk_test_…), jamais la clé réelle.
  *   node scripts/stripe-test-clock.mjs           (lance les 3 tests puis supprime les horloges)
  *   node scripts/stripe-test-clock.mjs --keep    (garde les horloges pour inspection dans le Dashboard)
+ *   node scripts/stripe-test-clock.mjs --resiliation --keep   (seulement la résiliation au mois 3, plus le portail)
  *
  *  A. Le webhook reçu deux fois ne crée qu'un seul calendrier de 12 mois
  *  B. Passé 12 mois, l'abonnement continue au mois le mois (et chaque mois est bien payé)
@@ -74,12 +75,19 @@ async function advance(clockId, to) {
   throw new Error("Horloge de test trop lente");
 }
 
+/* Avance de `from` à `to` mois après le début, un mois à la fois */
+async function advanceMonths(c, from, to) {
+  for (let m = from + 1; m <= to; m++) await advance(c.clock.id, addMonths(c.start, m) + 3600);
+}
+
 async function paidInvoices(subId) {
   const list = await stripe.invoices.list({ subscription: subId, limit: 100 });
   return { total: list.data.length, paid: list.data.filter((i) => i.status === "paid").length, failed: list.data.filter((i) => ["open", "uncollectible"].includes(i.status)).length };
 }
 
+const ONLY_CANCEL = process.argv.includes("--resiliation");
 try {
+  if (!ONLY_CANCEL) {
   /* ---------- A. Idempotence ---------- */
   step("A. Webhook reçu deux fois");
   const a = await newCustomer("A");
@@ -110,13 +118,13 @@ try {
   (wrong.length ? warn : ok)(`Montants : ${all.length - wrong.length}/${all.length} factures à 97,00 € TTC dont 16,17 € de TVA`);
   ok(`Après le 12e mois : ${after12.length} prélèvement(s) mensuel(s) de plus, prochain le ${fmt(subB.current_period_end)}`);
   results.push(["B. Continue au mois le mois après 12 mois, chaque mois payé", passB]);
+  } // fin de A et B
 
   /* ---------- C. Résiliation au mois 3 ---------- */
   step("C. Résiliation demandée au mois 3 (ce que fait le portail client : arrêt en fin de période)");
   const c = await newCustomer("C");
   const rc = await attachCommitment(stripe, c.sub.id);
-  await advance(c.clock.id, addMonths(c.start, 2) + 3600);
-  await advance(c.clock.id, addMonths(c.start, 3) + 3600);
+  await advanceMonths(c, 0, 3);
   let cancelError = null;
   try { await stripe.subscriptions.update(c.sub.id, { cancel_at_period_end: true }); } catch (e) { cancelError = e.message; }
   const subC = await stripe.subscriptions.retrieve(c.sub.id);
@@ -127,7 +135,7 @@ try {
     results.push(["C. Résiliation au mois 3 possible sans couper l'engagement", false]);
   } else {
     const stopsAt = subC.cancel_at || (subC.cancel_at_period_end ? subC.current_period_end : 0);
-    await advance(c.clock.id, addMonths(c.start, 5) + 3600);
+    await advanceMonths(c, 3, 5);
     const after = await stripe.subscriptions.retrieve(c.sub.id);
     const cut = after.status === "canceled" || (stopsAt && stopsAt < end - 86400);
     (cut ? warn : ok)(`Arrêt programmé le ${stopsAt ? fmt(stopsAt) : "—"}, fin d'engagement le ${fmt(end)}, statut au mois 5 : ${after.status}`);
@@ -139,8 +147,7 @@ try {
     step("D. Portail client réel au mois 3, à tester à la main");
     const d = await newCustomer("D");
     await attachCommitment(stripe, d.sub.id);
-    await advance(d.clock.id, addMonths(d.start, 2) + 3600);
-    await advance(d.clock.id, addMonths(d.start, 3) + 3600);
+    await advanceMonths(d, 0, 3);
     const ps = await stripe.billingPortal.sessions.create({ customer: d.customer.id, configuration: portalId, return_url: SITE + "/" }).catch((e) => ({ error: e.message }));
     if (ps.url) ok(`Ouvre ce lien (valable quelques minutes), clique « Annuler l'abonnement » et regarde la date de fin annoncée : ${ps.url}`);
     else warn(`Portail indisponible pour ce client : ${ps.error}`);
