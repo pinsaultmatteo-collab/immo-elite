@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <script>document.documentElement.classList.add("js");</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Résilier mon abonnement — Club IMMO Élite</title>
+  <meta name="description" content="Résilier ton abonnement au Club IMMO Élite en ligne. Tu reçois un accusé de réception par e-mail avec la date de fin.">
+  <meta name="robots" content="noindex, follow">
+  <meta name="theme-color" content="#FAF7F0">
+  <link rel="icon" type="image/png" href="assets/img/icon-128.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Manrope:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/styles.css">
+  <style>
+    .cancel-wrap { max-width: 640px; }
+    .cancel-form { display: grid; gap: 18px; margin-top: 2rem; background: var(--white); border: 1px solid var(--line); border-radius: var(--radius); padding: 26px 22px; }
+    .cancel-row { display: grid; gap: 18px; }
+    .field-group { display: grid; gap: 7px; }
+    .field-group label { font-weight: 700; font-size: .92rem; }
+    .field-group .hint { font-size: .82rem; color: var(--muted); }
+    .field-group input, .field-group select, .field-group textarea {
+      width: 100%; min-height: 50px; padding: 12px 14px; border-radius: 12px; border: 1.5px solid var(--line);
+      background: var(--cream); font: inherit; font-size: 1rem; color: var(--ink); transition: border-color .25s ease, box-shadow .25s ease;
+    }
+    .field-group textarea { min-height: 110px; resize: vertical; }
+    .field-group input:focus, .field-group select:focus, .field-group textarea:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px rgba(176,141,63,.18); }
+    .confirm-line { display: grid; grid-template-columns: 24px 1fr; gap: 12px; align-items: start; font-size: .95rem; line-height: 1.5; cursor: pointer; }
+    .confirm-line input { width: 22px; height: 22px; margin-top: 1px; accent-color: var(--gold-deep); }
+    .hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+    .form-error { display: none; color: #9B2C1F; background: #FBEDEA; border: 1px solid #F0C9C1; border-radius: 12px; padding: 12px 14px; font-size: .92rem; font-weight: 600; }
+    .form-error.is-visible { display: block; }
+    .cancel-done { display: none; margin-top: 2rem; background: var(--white); border: 1px solid var(--line); border-radius: var(--radius); padding: 30px 24px; text-align: center; }
+    .cancel-done.is-visible { display: block; }
+    .cancel-done .check { width: 64px; height: 64px; border-radius: 50%; background: var(--gold); margin: 0 auto 18px; display: grid; place-items: center; }
+    .cancel-done .check svg { width: 28px; height: 28px; stroke: var(--ink); fill: none; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+    .cancel-rules { display: grid; gap: 10px; margin-top: 1.4rem; }
+    .cancel-rules li { list-style: none; padding-left: 22px; position: relative; font-size: .97rem; line-height: 1.55; }
+    .cancel-rules li::before { content: ""; position: absolute; left: 0; top: .7em; width: 10px; height: 1.5px; background: var(--gold); }
+    @media (min-width: 720px) { .cancel-row { grid-template-columns: 1fr 1fr; } .cancel-form { padding: 32px 30px; } }
+  </style>
+</head>
+<body>
+<header class="header is-scrolled" id="header">
+  <div class="container">
+    <a href="/" class="logo" aria-label="IMMO Élite, retour à l'accueil">
+      <svg viewBox="0 0 64 64" fill="none" aria-hidden="true"><path d="M8 28L32 10l24 18" stroke="#B08D3F" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M22 30h6v22h-6zM32 30h14v5h-9v3.5h8v5h-8V47h9v5H32z" fill="#B08D3F"/><path d="M39 22l4-5h5l-5 5z" fill="#B08D3F"/></svg>
+      <span>IMMO <span class="logo-elite">Élite</span></span>
+    </a>
+    <div class="header-cta"><a href="/" class="btn btn--ghost btn--sm">Retour au site</a></div>
+  </div>
+</header>
+
+<main class="page-simple">
+  <section class="section" style="padding-top:0">
+    <div class="container">
+      <div class="cancel-wrap">
+        <span class="eyebrow">Club IMMO Élite</span>
+        <h1 style="font-size:clamp(2rem,1.4rem+2.6vw,3.2rem);margin-top:1rem">Résilier mon abonnement</h1>
+        <p class="lead" style="margin-top:1rem">Remplis ce formulaire pour résilier ton abonnement. Tu reçois aussitôt un accusé de réception par e-mail, avec la date à laquelle ton abonnement prend fin.</p>
+        <ul class="cancel-rules">
+          <li><strong>Pendant les 12 premiers mois</strong>, la résiliation prend effet à la fin de ton engagement. Les mensualités restent dues jusque-là, et tu gardes l'accès au club.</li>
+          <li><strong>Après les 12 mois</strong>, elle prend effet à la fin du mois en cours. Aucun prélèvement n'a lieu ensuite.</li>
+        </ul>
+
+        <form class="cancel-form" id="cancel-form" novalidate>
+          <div class="cancel-row">
+            <div class="field-group"><label for="prenom">Prénom</label><input id="prenom" name="prenom" type="text" autocomplete="given-name" required maxlength="60"></div>
+            <div class="field-group"><label for="nom">Nom</label><input id="nom" name="nom" type="text" autocomplete="family-name" required maxlength="80"></div>
+          </div>
+          <div class="field-group">
+            <label for="email">Adresse e-mail utilisée pour le paiement</label>
+            <input id="email" name="email" type="email" autocomplete="email" inputmode="email" required maxlength="160">
+            <span class="hint">C'est elle qui permet de retrouver ton abonnement.</span>
+          </div>
+          <div class="field-group">
+            <label for="motif">Motif <span class="hint">(facultatif)</span></label>
+            <select id="motif" name="motif">
+              <option value="">Choisir un motif</option>
+              <option>Je n'ai plus le temps</option>
+              <option>Raisons financières</option>
+              <option>J'ai atteint mon objectif</option>
+              <option>Le club ne correspond pas à mes attentes</option>
+              <option>Autre</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label for="message">Un mot pour Mattéo <span class="hint">(facultatif)</span></label>
+            <textarea id="message" name="message" maxlength="1000"></textarea>
+          </div>
+          <div class="hp" aria-hidden="true"><label for="website">Ne pas remplir</label><input id="website" name="website" type="text" tabindex="-1" autocomplete="off"></div>
+          <label class="confirm-line"><input type="checkbox" id="confirm" name="confirm" required><span>Je confirme vouloir résilier mon abonnement au Club IMMO Élite.</span></label>
+          <p class="form-error" id="form-error" role="alert"></p>
+          <button type="submit" class="btn btn--dark btn--block" id="submit-btn">Résilier mon abonnement</button>
+        </form>
+
+        <div class="cancel-done" id="cancel-done" role="status" aria-live="polite" tabindex="-1">
+          <div class="check"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+          <h2 style="font-size:1.6rem">Demande envoyée</h2>
+          <p style="margin-top:.8rem;color:var(--muted)">Un accusé de réception vient de partir vers l'adresse indiquée, avec la date de fin de ton abonnement. Pense à vérifier tes courriers indésirables.</p>
+          <p style="margin-top:.8rem;color:var(--muted)">Rien reçu dans l'heure ? Écris à <a href="mailto:contact@immoelite-formation.fr" class="link-line">contact@immoelite-formation.fr</a>.</p>
+        </div>
+
+        <p style="margin-top:1.6rem;font-size:.92rem;color:var(--muted)">Pour changer ta carte ou télécharger tes factures, utilise ton <a href="#" data-portal class="link-line">espace de facturation</a>.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="container">
+    <div class="footer-bottom" style="margin-top:0;border-top:0;padding-top:0">
+      <p>© 2026 IMMO Élite · PMC MARKETING SAS. <a href="mentions-legales.html" class="link-line">Mentions légales</a> · <a href="cgv.html" class="link-line">CGV</a> · <a href="confidentialite.html" class="link-line">Confidentialité</a></p>
+    </div>
+  </div>
+</footer>
+
+
+<script src="assets/js/config.js"></script>
+<script src="assets/js/tracking.js"></script>
+<script>
+  (function () {
+    var cfg = window.IE_CONFIG || {};
+    document.querySelectorAll("[data-portal]").forEach(function (a) {
+      if (cfg.portalUrl) { a.href = cfg.portalUrl; a.target = "_blank"; a.rel = "noopener"; }
+    });
+    var form = document.getElementById("cancel-form");
+    var err = document.getElementById("form-error");
+    var btn = document.getElementById("submit-btn");
+    var done = document.getElementById("cancel-done");
+    function showError(msg) { err.textContent = msg; err.classList.add("is-visible"); }
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      err.classList.remove("is-visible");
+      var data = {
+        prenom: form.prenom.value.trim(), nom: form.nom.value.trim(), email: form.email.value.trim(),
+        motif: form.motif.value, message: form.message.value.trim(), website: form.website.value, confirm: form.confirm.checked
+      };
+      if (!data.prenom || !data.nom) return showError("Merci d'indiquer ton prénom et ton nom.");
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(data.email)) return showError("Merci d'indiquer une adresse e-mail valide, celle utilisée pour le paiement.");
+      if (!data.confirm) return showError("Merci de cocher la case pour confirmer ta demande.");
+      btn.setAttribute("aria-busy", "true"); btn.textContent = "Envoi en cours…";
+      fetch("/api/resiliation", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) })
+        .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b }; }); })
+        .then(function (res) {
+          if (!res.ok) throw new Error(res.body && res.body.error || "Erreur");
+          form.style.display = "none"; done.classList.add("is-visible"); done.focus();
+        })
+        .catch(function (e2) {
+          showError(e2.message && e2.message !== "Erreur" ? e2.message : "La demande n'a pas pu être envoyée. Écris à contact@immoelite-formation.fr.");
+          btn.removeAttribute("aria-busy"); btn.textContent = "Résilier mon abonnement";
+        });
+    });
+  })();
+</script>
+</body>
+</html>

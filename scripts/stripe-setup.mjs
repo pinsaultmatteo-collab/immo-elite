@@ -6,7 +6,7 @@
  * Idempotent : relançable sans créer de doublons.
  *  1. Produit « Club IMMO Élite » + prix récurrent 97 € TTC / mois (lookup_key club-immo-elite-mensuel)
  *     et taux de TVA 20 % inclus (factures : HT, taux, TVA)
- *  2. Portail client : résiliation en ligne, factures, moyen de paiement, page de connexion
+ *  2. Portail client : factures, moyen de paiement, page de connexion (sans annulation : voir /resiliation)
  *  3. Endpoint webhook https://club.immoelite-formation.fr/api/stripe-webhook
  *  4. Contrôle final : crée une vraie session Checkout via la fonction du site, puis l'expire
  *
@@ -85,12 +85,9 @@ const portalParams = {
     customer_update: { enabled: true, allowed_updates: ["email", "address"] },
     invoice_history: { enabled: true },
     payment_method_update: { enabled: true },
-    subscription_cancel: {
-      enabled: true,
-      mode: "at_period_end",
-      proration_behavior: "none",
-      cancellation_reason: { enabled: true, options: ["too_expensive", "unused", "missing_features", "switched_service", "other"] },
-    },
+    // Pas d'annulation dans le portail : il libérerait l'engagement de 12 mois (constaté en test).
+    // Les résiliations passent par la page /resiliation et sont appliquées à la main.
+    subscription_cancel: { enabled: false },
     subscription_update: { enabled: false },
   },
   login_page: { enabled: true },

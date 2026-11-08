@@ -58,23 +58,15 @@
 <footer class="footer">
   <div class="container">
     <div class="footer-bottom" style="margin-top:0;border-top:0;padding-top:0">
-      <p>© 2026 IMMO Élite · PMC MARKETING SAS. <a href="mentions-legales.html" class="link-line">Mentions légales</a> · <a href="cgv.html" class="link-line">CGV</a> · <a href="confidentialite.html" class="link-line">Confidentialité</a> · <a href="#" data-portal class="link-line">Résilier mon abonnement</a> · <button type="button" data-cookie-settings class="link-line" style="font:inherit">Gérer mes cookies</button></p>
+      <p>© 2026 IMMO Élite · PMC MARKETING SAS. <a href="mentions-legales.html" class="link-line">Mentions légales</a> · <a href="cgv.html" class="link-line">CGV</a> · <a href="confidentialite.html" class="link-line">Confidentialité</a> · <a href="resiliation.html" class="link-line">Résilier mon abonnement</a></p>
     </div>
   </div>
 </footer>
 
-<div class="cookie" id="cookie" role="dialog" aria-live="polite" aria-label="Gestion des cookies">
-  <h4>Cookies</h4>
-  <p>J'utilise le Pixel Meta pour mesurer l'audience de cette page et mes publicités. Rien n'est déposé tant que tu n'as pas choisi. <a href="confidentialite.html">En savoir plus</a>.</p>
-  <div class="cookie-actions">
-    <button type="button" class="btn btn--ghost" data-consent="deny">Refuser</button>
-    <button type="button" class="btn btn--gold" data-consent="grant">Accepter</button>
-  </div>
-</div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script src="assets/js/config.js"></script>
-<script src="assets/js/consent.js"></script>
+<script src="assets/js/tracking.js"></script>
 <script>
   (function () {
     var cfg = window.IE_CONFIG || {};
@@ -83,16 +75,14 @@
       if (cfg.portalUrl) { a.href = cfg.portalUrl; a.target = "_blank"; a.rel = "noopener"; }
       else a.addEventListener("click", function (e) { e.preventDefault(); });
     });
-    /* Événement Purchase : une seule fois par session de paiement, et seulement après consentement */
+    /* Achat (Pixel Meta + GA4) : une seule fois par session de paiement, même si la page est rechargée */
     var params = new URLSearchParams(location.search);
     var sessionId = params.get("session_id");
-    if (!sessionId || !/^cs_(test|live)_[A-Za-z0-9]+$/.test(sessionId) || !window.IEConsent) return;
+    if (!sessionId || !/^cs_(test|live)_[A-Za-z0-9]+$/.test(sessionId) || !window.IETrack) return;
     var key = "ie_purchase_" + sessionId;
-    window.IEConsent.onGrant(function () {
-      try { if (localStorage.getItem(key)) return; } catch (e) {}
-      var ok = window.IEConsent.track("Purchase", { value: 97, currency: "EUR", content_name: "Club IMMO Élite", content_type: "product" }, { eventID: sessionId });
-      if (ok) { try { localStorage.setItem(key, String(Date.now())); } catch (e) {} }
-    });
+    try { if (localStorage.getItem(key)) return; } catch (e) {}
+    var ok = window.IETrack.track("Purchase", { value: 97, currency: "EUR", content_name: "Club IMMO Élite", content_type: "product" }, { eventID: sessionId });
+    if (ok) { try { localStorage.setItem(key, String(Date.now())); } catch (e) {} }
   })();
 </script>
 </body>

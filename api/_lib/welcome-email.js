@@ -89,7 +89,7 @@ export function buildWelcomeEmail({ prenom, email, skoolUrl, portalUrl, siteUrl,
     </td></tr>
     <tr><td style="padding:22px 28px 6px;">
       <p style="margin:0 0 12px;font-size:15px;line-height:1.6;">${invoiceLine}</p>
-      <p style="margin:0 0 12px;font-size:14px;line-height:1.6;color:#4A443C;">Ton abonnement : 97 € TTC par mois, engagement de 12 mois${end ? `, jusqu'au ${esc(end)}` : ""}, puis résiliable à tout moment. <a href="${esc(portalUrl)}" style="color:#7A6128;font-weight:700;">Gérer mon abonnement</a>.</p>
+      <p style="margin:0 0 12px;font-size:14px;line-height:1.6;color:#4A443C;">Ton abonnement : 97 € TTC par mois, engagement de 12 mois${end ? `, jusqu'au ${esc(end)}` : ""}, puis résiliable à tout moment. <a href="${esc(portalUrl)}" style="color:#7A6128;font-weight:700;">Carte et factures</a> · <a href="${esc(siteUrl)}/resiliation" style="color:#7A6128;font-weight:700;">Résilier mon abonnement</a>.</p>
       <p style="margin:22px 0 4px;font-size:16px;line-height:1.6;">À très vite en live,</p>
       <p style="margin:0 0 26px;font-size:16px;font-weight:700;">Mattéo</p>
     </td></tr>
@@ -119,7 +119,8 @@ export function buildWelcomeEmail({ prenom, email, skoolUrl, portalUrl, siteUrl,
     "",
     hasAttachment ? "Ta facture est jointe à cet e-mail." : invoiceUrl ? `Ta facture : ${invoiceUrl}` : "",
     `Ton abonnement : 97 € TTC par mois, engagement de 12 mois${end ? `, jusqu'au ${end}` : ""}, puis résiliable à tout moment.`,
-    `Gérer mon abonnement : ${portalUrl}`,
+    `Carte et factures : ${portalUrl}`,
+    `Résilier mon abonnement : ${siteUrl}/resiliation`,
     "",
     "À très vite en live,",
     "Mattéo",

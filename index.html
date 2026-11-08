@@ -645,7 +645,7 @@
         </ul>
         <div class="offer-cta">
           <button type="button" class="btn btn--gold btn--xl btn--block" data-checkout data-cta="offer">Rejoindre le club · 97 €/mois <svg class="btn-arrow"><use href="#i-arrow"/></svg></button>
-          <p class="offer-fine">97 € par mois TTC, engagement de 12 mois. Le paiement se fait sur une page sécurisée Stripe, où tu acceptes les <a href="cgv.html">CGV</a>. Après les 12 premiers mois, tu résilies en ligne depuis ton portail client, quand tu veux.</p>
+          <p class="offer-fine">97 € par mois TTC, engagement de 12 mois. Le paiement se fait sur une page sécurisée Stripe, où tu acceptes les <a href="cgv.html">CGV</a>. Tu résilies en ligne depuis la page <a href="resiliation.html">Résilier mon abonnement</a> : pendant les 12 premiers mois, la résiliation prend effet à la fin de l'engagement, ensuite à la fin du mois en cours.</p>
         </div>
         <div class="offer-trust">
           <span><svg viewBox="0 0 24 24"><use href="#i-lock"/></svg>Paiement sécurisé Stripe</span>
@@ -688,7 +688,7 @@
       </div>
       <div class="acc-item">
         <button class="acc-btn" type="button" aria-expanded="false"><span class="acc-label">Que se passe-t-il après 12 mois ?</span><span class="acc-plus" aria-hidden="true"></span></button>
-        <div class="acc-panel"><div class="acc-body"><p>L'abonnement continue au mois le mois, au même prix. Tu peux le résilier à tout moment depuis ton portail client Stripe, en ligne. Je te préviens par e-mail avant la fin des 12 mois.</p></div></div>
+        <div class="acc-panel"><div class="acc-body"><p>L'abonnement continue au mois le mois, au même prix. Tu peux le résilier à tout moment, en ligne, depuis la page « Résilier mon abonnement » : la résiliation prend effet à la fin du mois en cours. Je te préviens par e-mail avant la fin des 12 mois.</p></div></div>
       </div>
       <div class="acc-item">
         <button class="acc-btn" type="button" aria-expanded="false"><span class="acc-label">Je suis déjà propriétaire, c'est pour moi ?</span><span class="acc-plus" aria-hidden="true"></span></button>
@@ -720,7 +720,7 @@
       </div>
       <div class="acc-item">
         <button class="acc-btn" type="button" aria-expanded="false"><span class="acc-label">Comment je résilie ?</span><span class="acc-plus" aria-hidden="true"></span></button>
-        <div class="acc-panel"><div class="acc-body"><p>En ligne, depuis ton portail client Stripe, en quelques clics. L'engagement de 12 mois s'applique à la première année. Ensuite, la résiliation prend effet à la fin de la période de facturation en cours.</p></div></div>
+        <div class="acc-panel"><div class="acc-body"><p>En ligne, depuis la page « Résilier mon abonnement », en pied de page. Tu remplis le formulaire et tu reçois aussitôt un accusé de réception par e-mail avec ta date de fin. Pendant les 12 premiers mois, la résiliation prend effet à la fin de l'engagement. Ensuite, à la fin du mois en cours.</p></div></div>
       </div>
       <div class="acc-item">
         <button class="acc-btn" type="button" aria-expanded="false"><span class="acc-label">Et si je n'y arrive pas ?</span><span class="acc-plus" aria-hidden="true"></span></button>
@@ -784,8 +784,8 @@
           <li><a href="mentions-legales.html">Mentions légales</a></li>
           <li><a href="cgv.html">Conditions générales de vente</a></li>
           <li><a href="confidentialite.html">Politique de confidentialité</a></li>
-          <li><a href="#" data-portal>Résilier mon abonnement</a></li>
-          <li><button type="button" data-cookie-settings>Gérer mes cookies</button></li>
+          <li><a href="#" data-portal>Gérer mon abonnement (carte, factures)</a></li>
+          <li><a href="resiliation.html">Résilier mon abonnement</a></li>
         </ul>
       </div>
       <div>
@@ -811,14 +811,6 @@
 </div>
 
 <!-- Bandeau cookies -->
-<div class="cookie" id="cookie" role="dialog" aria-live="polite" aria-label="Gestion des cookies">
-  <h4>Cookies</h4>
-  <p>J'utilise le Pixel Meta pour mesurer l'audience de cette page et mes publicités. Rien n'est déposé tant que tu n'as pas choisi. <a href="confidentialite.html">En savoir plus</a>.</p>
-  <div class="cookie-actions">
-    <button type="button" class="btn btn--ghost" data-consent="deny">Refuser</button>
-    <button type="button" class="btn btn--gold" data-consent="grant">Accepter</button>
-  </div>
-</div>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <div class="lightbox" id="lightbox" aria-hidden="true"><button type="button" aria-label="Fermer">×</button><img alt=""></div>
@@ -826,7 +818,7 @@
 <script src="assets/js/config.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js" defer></script>
-<script src="assets/js/consent.js" defer></script>
+<script src="assets/js/tracking.js" defer></script>
 <script src="assets/js/main.js" defer></script>
 </body>
 </html>

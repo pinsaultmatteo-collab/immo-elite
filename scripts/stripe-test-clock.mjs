@@ -4,6 +4,7 @@
  *   node scripts/stripe-test-clock.mjs           (lance les 3 tests puis supprime les horloges)
  *   node scripts/stripe-test-clock.mjs --keep    (garde les horloges pour inspection dans le Dashboard)
  *   node scripts/stripe-test-clock.mjs --resiliation --keep   (seulement la résiliation au mois 3, plus le portail)
+ *   node scripts/stripe-test-clock.mjs --manuelle --keep       (résiliations traitées à la main : mois 3 et après 12 mois)
  *
  *  A. Le webhook reçu deux fois ne crée qu'un seul calendrier de 12 mois
  *  B. Passé 12 mois, l'abonnement continue au mois le mois (et chaque mois est bien payé)
@@ -14,6 +15,7 @@
 import Stripe from "stripe";
 import { loadEnv, requireTestKey, ok, warn, step } from "./_env.mjs";
 import { attachCommitment } from "../api/stripe-webhook.js";
+import { effectiveEnd, applyCancellation } from "../api/_lib/cancellation.js";
 
 loadEnv({ test: true }); // .env.test.local : jamais la clé réelle
 const key = requireTestKey();
@@ -39,11 +41,12 @@ async function ensureTestSetup() {
       customer_update: { enabled: true, allowed_updates: ["email", "address"] },
       invoice_history: { enabled: true },
       payment_method_update: { enabled: true },
-      subscription_cancel: { enabled: true, mode: "at_period_end", proration_behavior: "none", cancellation_reason: { enabled: true, options: ["too_expensive", "unused", "other"] } },
+      subscription_cancel: { enabled: false },
       subscription_update: { enabled: false },
     },
     metadata: TAG,
   });
+  if (portal.features?.subscription_cancel?.enabled) portal = await stripe.billingPortal.configurations.update(portal.id, { features: { subscription_cancel: { enabled: false } } });
   return { priceId: price.id, taxRateId: tax.id, portalId: portal.id };
 }
 const { priceId, taxRateId, portalId } = await ensureTestSetup();
@@ -86,8 +89,9 @@ async function paidInvoices(subId) {
 }
 
 const ONLY_CANCEL = process.argv.includes("--resiliation");
+const MANUAL = process.argv.includes("--manuelle");
 try {
-  if (!ONLY_CANCEL) {
+  if (!ONLY_CANCEL && !MANUAL) {
   /* ---------- A. Idempotence ---------- */
   step("A. Webhook reçu deux fois");
   const a = await newCustomer("A");
@@ -120,28 +124,65 @@ try {
   results.push(["B. Continue au mois le mois après 12 mois, chaque mois payé", passB]);
   } // fin de A et B
 
-  /* ---------- C. Résiliation au mois 3 ---------- */
-  step("C. Résiliation demandée au mois 3 (ce que fait le portail client : arrêt en fin de période)");
-  const c = await newCustomer("C");
-  const rc = await attachCommitment(stripe, c.sub.id);
-  await advanceMonths(c, 0, 3);
-  let cancelError = null;
-  try { await stripe.subscriptions.update(c.sub.id, { cancel_at_period_end: true }); } catch (e) { cancelError = e.message; }
-  const subC = await stripe.subscriptions.retrieve(c.sub.id);
-  const end = Number(subC.metadata.commitment_end || rc.commitmentEnd);
-  if (cancelError) {
-    warn(`Stripe refuse la résiliation d'un abonnement sous calendrier : « ${cancelError} »`);
-    warn("Conséquence : le portail risque de ne pas proposer la résiliation pendant les 12 mois. Il faudra un formulaire de résiliation sur le site.");
-    results.push(["C. Résiliation au mois 3 possible sans couper l'engagement", false]);
+  /* ---------- E et F. Résiliation traitée à la main (formulaire + scripts/appliquer-resiliation.mjs) ---------- */
+  if (MANUAL) {
+    const clockNow = async (c) => (await stripe.testHelpers.testClocks.retrieve(c.clock.id)).frozen_time;
+    const paid = async (id) => (await stripe.invoices.list({ subscription: id, limit: 100 })).data.filter((i) => i.status === "paid").length;
+
+    step("E. Demande au mois 3, appliquée à la main : l'abonné paie jusqu'au 12e mois, puis s'arrête");
+    const e = await newCustomer("E");
+    await attachCommitment(stripe, e.sub.id);
+    await advanceMonths(e, 0, 3);
+    const subE = await stripe.subscriptions.retrieve(e.sub.id);
+    const endE = await effectiveEnd(stripe, subE, await clockNow(e));
+    const appE = await applyCancellation(stripe, subE);
+    ok(`Au mois 3 : fin annoncée le ${fmt(endE.endsAt)} (${endE.inCommitment ? "fin de l'engagement" : "fin du mois"}), appliquée via ${appE.how === "schedule" ? "le calendrier" : "l'abonnement"}`);
+    await advanceMonths(e, 3, 13);
+    const afterE = await stripe.subscriptions.retrieve(e.sub.id);
+    const paidE = await paid(e.sub.id);
+    const passE = endE.inCommitment && afterE.status === "canceled" && Math.abs(afterE.ended_at - addMonths(e.start, 12)) < 2 * 86400 && paidE === 12;
+    (passE ? ok : warn)(`Au mois 13 : abonnement ${afterE.status}, arrêté le ${fmt(afterE.ended_at)}, ${paidE} mensualités payées (attendu : 12)`);
+    results.push(["E. Demande au mois 3 : 12 mensualités payées, arrêt à la fin de l'engagement", passE]);
+
+    step("F. Demande après 12 mois, appliquée à la main : arrêt à la fin du mois en cours");
+    const f = await newCustomer("F");
+    await attachCommitment(stripe, f.sub.id);
+    await advanceMonths(f, 0, 13);
+    const subF = await stripe.subscriptions.retrieve(f.sub.id);
+    const endF = await effectiveEnd(stripe, subF, await clockNow(f));
+    const appF = await applyCancellation(stripe, subF);
+    ok(`Au mois 13 : fin annoncée le ${fmt(endF.endsAt)} (${endF.inCommitment ? "fin de l'engagement" : "fin du mois"}), appliquée via ${appF.how === "schedule" ? "le calendrier" : "l'abonnement"}`);
+    await advanceMonths(f, 13, 15);
+    const afterF = await stripe.subscriptions.retrieve(f.sub.id);
+    const paidF = await paid(f.sub.id);
+    const passF = !endF.inCommitment && afterF.status === "canceled" && Math.abs(afterF.ended_at - addMonths(f.start, 14)) < 2 * 86400 && paidF === 14;
+    (passF ? ok : warn)(`Au mois 15 : abonnement ${afterF.status}, arrêté le ${fmt(afterF.ended_at)}, ${paidF} mensualités payées (attendu : 14)`);
+    results.push(["F. Demande après 12 mois : arrêt à la fin du mois en cours", passF]);
   } else {
-    const stopsAt = subC.cancel_at || (subC.cancel_at_period_end ? subC.current_period_end : 0);
-    await advanceMonths(c, 3, 5);
-    const after = await stripe.subscriptions.retrieve(c.sub.id);
-    const cut = after.status === "canceled" || (stopsAt && stopsAt < end - 86400);
-    (cut ? warn : ok)(`Arrêt programmé le ${stopsAt ? fmt(stopsAt) : "—"}, fin d'engagement le ${fmt(end)}, statut au mois 5 : ${after.status}`);
-    if (cut) warn("La résiliation en fin de période COUPE l'engagement de 12 mois. À trancher avec Mattéo avant la mise en production.");
-    results.push(["C. Résiliation au mois 3 ne coupe pas l'engagement", !cut]);
+    /* ---------- C. Résiliation au mois 3 ---------- */
+    step("C. Résiliation demandée au mois 3 (ce que fait le portail client : arrêt en fin de période)");
+    const c = await newCustomer("C");
+    const rc = await attachCommitment(stripe, c.sub.id);
+    await advanceMonths(c, 0, 3);
+    let cancelError = null;
+    try { await stripe.subscriptions.update(c.sub.id, { cancel_at_period_end: true }); } catch (e) { cancelError = e.message; }
+    const subC = await stripe.subscriptions.retrieve(c.sub.id);
+    const end = Number(subC.metadata.commitment_end || rc.commitmentEnd);
+    if (cancelError) {
+      warn(`Stripe refuse la résiliation d'un abonnement sous calendrier : « ${cancelError} »`);
+      warn("Conséquence : le portail risque de ne pas proposer la résiliation pendant les 12 mois. Il faudra un formulaire de résiliation sur le site.");
+      results.push(["C. Résiliation au mois 3 possible sans couper l'engagement", false]);
+    } else {
+      const stopsAt = subC.cancel_at || (subC.cancel_at_period_end ? subC.current_period_end : 0);
+      await advanceMonths(c, 3, 5);
+      const after = await stripe.subscriptions.retrieve(c.sub.id);
+      const cut = after.status === "canceled" || (stopsAt && stopsAt < end - 86400);
+      (cut ? warn : ok)(`Arrêt programmé le ${stopsAt ? fmt(stopsAt) : "—"}, fin d'engagement le ${fmt(end)}, statut au mois 5 : ${after.status}`);
+      if (cut) warn("La résiliation en fin de période COUPE l'engagement de 12 mois. À trancher avec Mattéo avant la mise en production.");
+      results.push(["C. Résiliation au mois 3 ne coupe pas l'engagement", !cut]);
+    }
   }
+
   /* ---------- D. Portail réel, à la main (seulement avec --keep) ---------- */
   if (KEEP) {
     step("D. Portail client réel au mois 3, à tester à la main");
