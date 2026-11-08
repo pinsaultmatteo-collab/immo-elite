@@ -49,11 +49,11 @@
   document.querySelectorAll("[data-booking]").forEach(function (a) {
     a.setAttribute("href", bookingHref);
     if (cfg.bookingUrl) { a.setAttribute("target", "_blank"); a.setAttribute("rel", "noopener"); }
-    a.addEventListener("click", function () { window.IEConsent && window.IEConsent.track("Lead", { content_name: "Appel découverte" }); });
+    a.addEventListener("click", function () { window.IETrack && window.IETrack.track("Lead", { content_name: "Appel découverte" }); });
   });
   document.querySelectorAll("[data-portal]").forEach(function (a) {
     if (cfg.portalUrl) { a.setAttribute("href", cfg.portalUrl); a.setAttribute("target", "_blank"); a.setAttribute("rel", "noopener"); }
-    else a.addEventListener("click", function (e) { e.preventDefault(); toast("Le portail de résiliation sera disponible à l'ouverture du club."); });
+    else a.addEventListener("click", function (e) { e.preventDefault(); toast("L'espace de facturation sera disponible à l'ouverture du club."); });
   });
 
   /* ---------- Vidéo de présentation ---------- */
@@ -99,7 +99,7 @@
       video.controls = true;
       var p = video.play();
       if (p && p.catch) p.catch(function () {});
-      window.IEConsent && window.IEConsent.track("ViewContent", { content_name: "Vidéo de présentation", content_type: "video" });
+      window.IETrack && window.IETrack.track("ViewContent", { content_name: "Vidéo de présentation", content_type: "video" });
     }
     cover.addEventListener("click", startVideo);
     video.addEventListener("ended", function () { cover.classList.remove("is-hidden"); frame.classList.remove("is-playing"); video.controls = false; });
@@ -360,7 +360,7 @@
     btn.setAttribute("aria-busy", "true");
     var original = btn.innerHTML;
     btn.textContent = "Ouverture du paiement sécurisé…";
-    window.IEConsent && window.IEConsent.track("InitiateCheckout", { content_name: "Club IMMO Élite", value: 97, currency: "EUR" });
+    window.IETrack && window.IETrack.track("InitiateCheckout", { content_name: "Club IMMO Élite", value: 97, currency: "EUR" });
     var ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
     var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 9000) : null;
     fetch(cfg.checkoutEndpoint || "/api/create-checkout-session", {
@@ -378,9 +378,7 @@
   }
   document.querySelectorAll("[data-checkout]").forEach(function (btn) { btn.addEventListener("click", function () { goCheckout(btn); }); });
 
-  /* ---------- Pixel : ViewContent (seulement après consentement) ---------- */
-  if (window.IEConsent) {
-    window.IEConsent.onGrant(function () { window.IEConsent.track("ViewContent", { content_name: "Club IMMO Élite", content_category: "Communauté", value: 97, currency: "EUR" }); });
-  }
+  /* ---------- Suivi : vue de l'offre (Pixel Meta + GA4) ---------- */
+  if (window.IETrack) window.IETrack.track("ViewContent", { content_name: "Club IMMO Élite", content_category: "Communauté", value: 97, currency: "EUR" });
 
 })();

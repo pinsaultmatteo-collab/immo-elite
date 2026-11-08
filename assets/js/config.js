@@ -29,8 +29,9 @@ window.IE_CONFIG = {
   // Lien de connexion au portail client Stripe (Paramètres > Portail client).
   portalUrl: "https://billing.stripe.com/p/login/5kQ3cv8qv258388fH27EQ00",
 
-  // Pixel Meta. Ne se charge qu'après consentement.
+  // Pixel Meta et Google Analytics 4, chargés dès l'arrivée (sans bandeau de consentement).
   pixelId: "958400803630500",
+  ga4Id: "G-5DN095GXV6",
 
   // Les 4 témoignages de l'ancienne page : passer à false s'ils ne sont pas confirmés.
   showTestimonials: true

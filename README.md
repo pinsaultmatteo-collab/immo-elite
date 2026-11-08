@@ -7,13 +7,14 @@ Construit à partir du « Brief Claude Code — Page de vente Club IMMO ÉLITE �
 
 | Fichier | Rôle |
 | --- | --- |
-| `index.html` | La page de vente (15 sections, barre fixe mobile, bandeau cookies) |
+| `index.html` | La page de vente (15 sections, barre fixe mobile) |
 | `merci.html` | Page de remerciement après paiement (3 étapes, événement Purchase une seule fois) |
+| `resiliation.html` + `api/resiliation.js` | Formulaire de résiliation, accusé de réception automatique, notification à Mattéo |
 | `liens.html` | Page « lien en bio » Instagram : deux portes, le club et l'appel Calendly. Adresse publique : `/liens` |
 | `mentions-legales.html`, `cgv.html`, `confidentialite.html` | Pages légales, champs encadrés à compléter, CGV à faire valider par un avocat |
 | `assets/css/styles.css` | Charte IMMO Élite, mobile d'abord (375 px), effets 3D / parallaxe / survol |
 | `assets/js/config.js` | **Le seul fichier à remplir** : lien de réservation, ID Vimeo, portail Stripe… |
-| `assets/js/consent.js` | Bandeau cookies CNIL + Pixel Meta (ID 958400803630500), muet sans consentement |
+| `assets/js/tracking.js` | Pixel Meta (958400803630500) et GA4 (G-5DN095GXV6), chargés dès l'arrivée, sans bandeau (choix de Mattéo du 8 novembre 2026) |
 | `assets/js/main.js` | Animations, accordéons, barre fixe, appel à la fonction de paiement |
 | `api/create-checkout-session.js` | Crée la session Stripe Checkout (abonnement 97 €/mois) |
 | `api/stripe-webhook.js` | Attache l'engagement de 12 mois (calendrier d'abonnement), idempotent |
@@ -120,7 +121,7 @@ Paiement de bout en bout sur le site : bouton « Rejoindre le club », carte `42
 - [x] Le webhook crée un seul calendrier de 12 mois, même reçu deux fois (test A, 8 novembre 2026)
 - [x] Passé 12 mois, l'abonnement continue au mois le mois (test B : 14 factures payées sur 13 mois, toutes à 97 € TTC dont 16,17 € de TVA)
 - [ ] **Une résiliation demandée au mois 3 coupe l'engagement (constaté le 8 novembre 2026).** L'API refuse de modifier un abonnement sous calendrier, mais le portail client libère le calendrier et programme l'arrêt en fin de mois : l'abonné de test est parti au mois 4 au lieu du mois 12. Décision à prendre avant d'envoyer du trafic.
-- [ ] Le Pixel reste muet tant que les cookies ne sont pas acceptés
+- [x] ~~Le Pixel reste muet tant que les cookies ne sont pas acceptés~~ Abandonné : bandeau de consentement retiré à la demande de Mattéo, qui en assume le risque CNIL. Pixel Meta et GA4 se chargent dès l'arrivée.
 - [ ] Tout se lit et se clique à 375 px de large
 
 Le webhook écrit aussi une **alerte dans les logs Vercel** (`ALERTE engagement`) si un abonné programme un arrêt avant la fin de ses 12 mois.
@@ -133,7 +134,7 @@ node scripts/test-achat-gratuit.mjs --verifier cs_live_…  # engagement, TVA, c
 node scripts/test-achat-gratuit.mjs --nettoyer cs_live_…  # annule l'abonnement de test sans prorata, supprime le coupon
 ```
 
-Pendant le test, refuser les cookies sur la page merci, sinon le Pixel Meta compte un faux achat de 97 €.
+Pendant le test, la page merci envoie un achat de 97 € au Pixel Meta et à GA4. Pour l'éviter, utiliser une extension de blocage des publicités le temps du test.
 
 ### Passage en production
 
@@ -173,6 +174,43 @@ Tant que ces variables manquent, rien ne casse : le paiement et l'engagement fon
 Côté Skool : groupe privé avec demandes d'adhésion activées, et une question d'adhésion « Quelle adresse e-mail as-tu utilisée pour le paiement ? » pour retrouver chaque membre dans Stripe. Pour la délivrabilité, activer aussi DKIM sur la messagerie OVH (Web Cloud > Emails > DKIM).
 
 Les logs Vercel gardent aussi une ligne `[skool]` par nouvel abonné (nom, e-mail, téléphone, société). `SKOOL_INVITE_WEBHOOK_URL` reste disponible pour brancher plus tard une automatisation Zapier.
+
+## 5 bis. Résiliations (traitées à la main)
+
+Le portail client Stripe **ne propose pas d'annuler** : en test, il libérait l'engagement et l'abonné partait au mois 4. Le portail sert seulement à changer de carte et à télécharger les factures.
+
+Les résiliations passent par la page **`/resiliation`**, liée en pied de page de toutes les pages et dans l'e-mail de bienvenue (exigence de résiliation en ligne, article L. 215-1-1 du Code de la consommation).
+
+1. Le client remplit le formulaire : prénom, nom, e-mail du paiement, motif facultatif, case de confirmation.
+2. La fonction `api/resiliation.js` retrouve l'abonnement, calcule la date de fin et la note sur l'abonnement (`cancellation_requested_at`, `cancellation_effective_at`, `cancellation_reason`).
+3. Le client reçoit **aussitôt un accusé de réception** avec la date de demande et la date de fin : fin de l'engagement pendant les 12 premiers mois, fin du mois en cours ensuite.
+4. Mattéo reçoit une notification (adresse `MAIL_NOTIFY`, sinon `MAIL_BCC`, sinon `SMTP_USER`) avec la commande à lancer.
+5. **Mattéo applique la résiliation** :
+
+```bash
+node scripts/appliquer-resiliation.mjs client@exemple.fr
+```
+
+La commande montre d'abord ce qui va se passer. Ajouter `--confirmer` pour appliquer : pendant l'engagement, le calendrier passe en « annuler à la fin » et l'abonnement s'arrête le dernier jour des 12 mois ; après, arrêt en fin de mois. Puis retirer le membre du groupe Skool à la date de fin.
+
+La réponse du formulaire est volontairement neutre : elle ne révèle pas si une adresse est abonnée. Un champ piège invisible écarte les robots.
+
+Testé en mode test Stripe avec horloges : `node scripts/stripe-test-clock.mjs --manuelle`.
+
+## 5 ter. Suivi : Pixel Meta et GA4
+
+Les deux outils se chargent sur toutes les pages dès l'arrivée du visiteur (`assets/js/tracking.js`, identifiants dans `config.js`). Événements envoyés :
+
+| Moment | Pixel Meta | GA4 |
+| --- | --- | --- |
+| Chaque page | PageView | page_view (automatique) + mesures améliorées |
+| Arrivée sur la page de vente | ViewContent | view_item |
+| Lecture de la vidéo | ViewContent (vidéo) | video_start |
+| Clic sur « Rejoindre le club » | InitiateCheckout | begin_checkout |
+| Clic sur un bouton d'appel découverte | Lead | generate_lead |
+| Page merci, une fois par commande | Purchase 97 € | purchase 97 € (dont 16,17 € de TVA), identifiant = session Stripe |
+
+Dans GA4, marquer `purchase` et `generate_lead` comme événements clés (Administration > Événements). Le flux GA4 est déclaré sur `www.immoelite-formation.fr` mais mesure aussi `club.immoelite-formation.fr` (même domaine racine).
 
 ## 6. Questions restées ouvertes (brief, dernière section)
 
