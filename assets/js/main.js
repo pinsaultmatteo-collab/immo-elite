@@ -56,6 +56,47 @@
     else a.addEventListener("click", function (e) { e.preventDefault(); toast("L'espace de facturation sera disponible à l'ouverture du club."); });
   });
 
+  /* ---------- Lecteur vidéo vertical réutilisable (haut de page, témoignage) ---------- */
+  function setupVideoFrame(frameEl, vc, opts) {
+    opts = opts || {};
+    var small = window.matchMedia("(max-width: 720px)").matches;
+    var src = (small && vc.mp4Mobile) || vc.mp4 || vc.mp4Mobile;
+    if (!frameEl || !src) return;
+    var video = document.createElement("video");
+    video.setAttribute("playsinline", "");
+    video.setAttribute("webkit-playsinline", "");
+    video.preload = "metadata";
+    if (vc.poster) video.poster = vc.poster;
+    video.src = src;
+    video.setAttribute("aria-label", (vc.title || opts.label || "Vidéo") + " — Club IMMO Élite");
+    var cover = document.createElement("div");
+    cover.className = "video-cover";
+    cover.innerHTML =
+      '<div class="vp-top">' + (opts.label || "Vidéo") + '</div>' +
+      '<button type="button" class="vp-play" aria-label="Lire la vidéo"><svg viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></svg></button>' +
+      '<div class="vp-bottom">' + (vc.title ? '<div class="vp-title">' + vc.title + '</div>' : '') +
+      '<div class="vp-sub">' + (vc.byline || "Mattéo Pinsault") + (vc.duration ? " · " + vc.duration : "") + '</div></div>';
+    frameEl.appendChild(video);
+    frameEl.appendChild(cover);
+    function start() {
+      cover.classList.add("is-hidden");
+      frameEl.classList.add("is-playing");
+      frameEl.style.transform = "";
+      video.controls = true;
+      var pr = video.play();
+      if (pr && pr.catch) pr.catch(function () {});
+      window.IETrack && window.IETrack.track("ViewContent", { content_name: opts.track || opts.label || "Vidéo", content_type: "video" });
+    }
+    cover.addEventListener("click", start);
+    video.addEventListener("ended", function () { cover.classList.remove("is-hidden"); frameEl.classList.remove("is-playing"); video.controls = false; });
+    /* Pause quand le cadre sort de l'écran */
+    if ("IntersectionObserver" in window) {
+      new IntersectionObserver(function (entries) {
+        entries.forEach(function (en) { if (!en.isIntersecting && !video.paused) video.pause(); });
+      }, { threshold: 0.15 }).observe(frameEl);
+    }
+  }
+
   /* ---------- Vidéo de présentation ---------- */
   var frame = document.getElementById("video-frame");
   var placeholder = document.getElementById("video-placeholder");
@@ -70,49 +111,37 @@
     frame.appendChild(iframe);
     frame.classList.remove("tilt");
   } else if (frame && (vcfg.mp4 || vcfg.mp4Mobile)) {
-    var small = window.matchMedia("(max-width: 720px)").matches;
-    var src = (small && vcfg.mp4Mobile) || vcfg.mp4 || vcfg.mp4Mobile;
-    var video = document.createElement("video");
-    video.setAttribute("playsinline", "");
-    video.setAttribute("webkit-playsinline", "");
-    video.preload = "metadata";
-    if (vcfg.poster) video.poster = vcfg.poster;
-    video.src = src;
-    video.setAttribute("aria-label", (vcfg.title || "Vidéo de présentation") + " — Club IMMO Élite");
-
-    var cover = document.createElement("div");
-    cover.className = "video-cover";
-    cover.innerHTML =
-      '<div class="vp-top">Vidéo de présentation</div>' +
-      '<button type="button" class="vp-play" aria-label="Lire la vidéo"><svg viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></svg></button>' +
-      '<div class="vp-bottom">' + (vcfg.title ? '<div class="vp-title">' + vcfg.title + '</div>' : '') +
-      '<div class="vp-sub">Mattéo Pinsault' + (vcfg.duration ? " · " + vcfg.duration : "") + '</div></div>';
-
     if (placeholder) placeholder.remove();
-    frame.appendChild(video);
-    frame.appendChild(cover);
-
-    function startVideo() {
-      cover.classList.add("is-hidden");
-      frame.classList.add("is-playing");
-      frame.style.transform = "";
-      video.controls = true;
-      var p = video.play();
-      if (p && p.catch) p.catch(function () {});
-      window.IETrack && window.IETrack.track("ViewContent", { content_name: "Vidéo de présentation", content_type: "video" });
-    }
-    cover.addEventListener("click", startVideo);
-    video.addEventListener("ended", function () { cover.classList.remove("is-hidden"); frame.classList.remove("is-playing"); video.controls = false; });
-    video.addEventListener("pause", function () { if (video.ended) return; });
-    /* On met en pause quand le cadre sort de l'écran */
-    if ("IntersectionObserver" in window) {
-      new IntersectionObserver(function (entries) {
-        entries.forEach(function (en) { if (!en.isIntersecting && !video.paused) video.pause(); });
-      }, { threshold: 0.15 }).observe(frame);
-    }
+    setupVideoFrame(frame, vcfg, { label: "Vidéo de présentation", track: "Vidéo de présentation" });
   } else if (placeholder) {
     placeholder.querySelector(".vp-play").addEventListener("click", function () { toast("La vidéo de présentation arrive très bientôt."); });
   }
+
+  /* ---------- Témoignage vidéo ---------- */
+  document.querySelectorAll("[data-video]").forEach(function (el) {
+    var key = el.getAttribute("data-video");
+    if (cfg[key]) setupVideoFrame(el, cfg[key], { label: el.getAttribute("data-video-label") || "Témoignage", track: el.getAttribute("data-video-label") || key });
+  });
+
+  /* ---------- Réseaux sociaux : LinkedIn affiché seulement si son lien est renseigné ---------- */
+  var socials = cfg.socials || {};
+  document.querySelectorAll("[data-social]").forEach(function (a) {
+    var url = socials[a.getAttribute("data-social")];
+    if (url) { a.setAttribute("href", url); a.hidden = false; }
+    else if (!a.getAttribute("href") || a.getAttribute("href") === "#") { var li = a.closest("li"); (li || a).remove(); }
+  });
+
+  /* ---------- Galerie de chantiers : flèches sur ordinateur ---------- */
+  document.querySelectorAll("[data-gallery]").forEach(function (g) {
+    var track = g.querySelector(".field-track");
+    g.querySelectorAll("[data-gallery-dir]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var card = track.querySelector(".field-card");
+        var step = card ? card.getBoundingClientRect().width + 16 : 300;
+        track.scrollBy({ left: step * Number(b.getAttribute("data-gallery-dir")), behavior: reduced ? "auto" : "smooth" });
+      });
+    });
+  });
 
   /* ---------- Illustration au trait : on inline le symbole pour animer le tracé ---------- */
   function inlineSymbol(svg) {
@@ -359,7 +388,7 @@
     var fallback = cfg.checkoutFallbackUrl;
     btn.setAttribute("aria-busy", "true");
     var original = btn.innerHTML;
-    btn.textContent = "Ouverture du paiement sécurisé…";
+    btn.textContent = btn.classList.contains("btn--sm") ? "Ouverture…" : "Ouverture du paiement sécurisé…";
     window.IETrack && window.IETrack.track("InitiateCheckout", { content_name: "Club IMMO Élite", value: 97, currency: "EUR" });
     var ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
     var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 9000) : null;
@@ -376,7 +405,7 @@
       })
       .finally(function () { if (timer) clearTimeout(timer); });
   }
-  document.querySelectorAll("[data-checkout]").forEach(function (btn) { btn.addEventListener("click", function () { goCheckout(btn); }); });
+  document.querySelectorAll("[data-checkout]").forEach(function (btn) { btn.addEventListener("click", function (e) { e.preventDefault(); if (btn.getAttribute("aria-busy") === "true") return; goCheckout(btn); }); });
 
   /* ---------- Suivi : vue de l'offre (Pixel Meta + GA4) ---------- */
   if (window.IETrack) window.IETrack.track("ViewContent", { content_name: "Club IMMO Élite", content_category: "Communauté", value: 97, currency: "EUR" });

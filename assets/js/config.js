@@ -27,6 +27,23 @@ window.IE_CONFIG = {
     duration: "1 min 32"
   },
 
+  // Témoignage vidéo de la page de vente : Pablo, accompagné individuellement (1 min 07).
+  testimonialVideo: {
+    mp4: "assets/video/temoignage-pablo-1080.mp4",
+    mp4Mobile: "assets/video/temoignage-pablo-720.mp4",
+    poster: "assets/video/temoignage-pablo-poster.jpg",
+    title: "",
+    duration: "1 min 07"
+  },
+
+  // Réseaux sociaux. Un lien vide masque l'icône (LinkedIn en attente de l'adresse du profil).
+  socials: {
+    instagram: "https://www.instagram.com/matteo_pinsault/",
+    youtube: "https://www.youtube.com/@Matt%C3%A9oPinsault",
+    tiktok: "https://www.tiktok.com/@matteo_pinsault",
+    linkedin: ""
+  },
+
   // Identifiant Vimeo de la vidéo verticale (prioritaire sur `video` s'il est rempli).
   vimeoId: "",
 

@@ -20,7 +20,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Manrope:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="assets/css/styles.css?v=2026110802">
+  <link rel="stylesheet" href="assets/css/styles.css?v=2026110804">
   <style>
     /* ---------- Page lien en bio ---------- */
     body.bio { background: var(--ink); color: var(--text-on-dark); min-height: 100svh; }
@@ -81,7 +81,8 @@
     .bio-story a { color: var(--gold-light); font-weight: 700; }
 
     .bio-foot { margin-top: auto; padding-top: 40px; text-align: center; font-size: .8rem; color: var(--muted-dark); }
-    .bio-social { display: flex; justify-content: center; gap: 10px; margin-bottom: 18px; }
+    .bio-social { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-bottom: 18px; }
+    .bio-social a[hidden] { display: none; }
     .bio-social a { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--line-dark); color: var(--text-on-dark); font-weight: 700; font-size: .85rem; transition: border-color .3s ease, color .3s ease, transform .4s var(--ease-out); }
     .bio-social a:hover { border-color: var(--gold-light); color: var(--gold-light); transform: translateY(-2px); }
     .bio-social svg { width: 18px; height: 18px; fill: currentColor; }
@@ -194,6 +195,8 @@
     <div class="bio-social">
       <a href="https://www.youtube.com/@Matt%C3%A9oPinsault" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M23 7.1a3 3 0 0 0-2.1-2.1C19 4.5 12 4.5 12 4.5s-7 0-8.9.5A3 3 0 0 0 1 7.1 31 31 0 0 0 .5 12a31 31 0 0 0 .5 4.9 3 3 0 0 0 2.1 2.1c1.9.5 8.9.5 8.9.5s7 0 8.9-.5a3 3 0 0 0 2.1-2.1 31 31 0 0 0 .5-4.9 31 31 0 0 0-.5-4.9zM9.8 15.5v-7l6 3.5z"/></svg>YouTube</a>
       <a href="https://www.instagram.com/matteo_pinsault/" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M12 7.3a4.7 4.7 0 1 0 0 9.4 4.7 4.7 0 0 0 0-9.4zm0 7.7a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm5.9-7.9a1.1 1.1 0 1 1-2.2 0 1.1 1.1 0 0 1 2.2 0zM21 7.1c-.1-1.5-.4-2.8-1.5-3.9S17.1 1.8 15.6 1.7C14 1.6 10 1.6 8.4 1.7 6.9 1.8 5.6 2.1 4.5 3.2S3.1 5.6 3 7.1c-.1 1.5-.1 6.2 0 7.8.1 1.5.4 2.8 1.5 3.9s2.4 1.4 3.9 1.5c1.6.1 6.3.1 7.8 0 1.5-.1 2.8-.4 3.9-1.5s1.4-2.4 1.5-3.9c.1-1.6.1-6.3 0-7.8zm-2 9.5a3 3 0 0 1-1.7 1.7c-1.2.5-4 .4-5.3.4s-4.1.1-5.3-.4a3 3 0 0 1-1.7-1.7c-.5-1.2-.4-4-.4-5.3s-.1-4.1.4-5.3A3 3 0 0 1 6.7 3.9c1.2-.5 4-.4 5.3-.4s4.1-.1 5.3.4A3 3 0 0 1 19 5.6c.5 1.2.4 4 .4 5.3s.1 4.1-.4 5.3z"/></svg>Instagram</a>
+      <a href="https://www.tiktok.com/@matteo_pinsault" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M16.6 2h-3.3v13.3a2.9 2.9 0 1 1-2-2.8V9.1a6.2 6.2 0 1 0 5.3 6.2V8.6a7.9 7.9 0 0 0 4.6 1.5V6.8a4.6 4.6 0 0 1-4.6-4.8z"/></svg>TikTok</a>
+      <a href="#" data-social="linkedin" target="_blank" rel="noopener" hidden><svg viewBox="0 0 24 24"><path d="M20.45 20.45h-3.56v-5.57c0-1.33-.02-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.35V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28zM5.34 7.43a2.06 2.06 0 1 1 0-4.13 2.06 2.06 0 0 1 0 4.13zM7.12 20.45H3.56V9h3.56v11.45zM22.22 0H1.77C.79 0 0 .77 0 1.73v20.54C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.73V1.73C24 .77 23.2 0 22.22 0z"/></svg>LinkedIn</a>
     </div>
     <div class="bio-legal">
       <a href="mentions-legales.html">Mentions légales</a>
@@ -210,12 +213,19 @@
 </div>
 
 
-<script src="assets/js/config.js?v=2026110802"></script>
-<script src="assets/js/tracking.js?v=2026110802"></script>
+<script src="assets/js/config.js?v=2026110804"></script>
+<script src="assets/js/tracking.js?v=2026110804"></script>
 <script>
   (function () {
     var cfg = window.IE_CONFIG || {};
     var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    /* Réseaux : LinkedIn affiché seulement si son lien est renseigné */
+    var socials = cfg.socials || {};
+    document.querySelectorAll("[data-social]").forEach(function (a) {
+      var url = socials[a.getAttribute("data-social")];
+      if (url) { a.href = url; a.hidden = false; } else a.remove();
+    });
 
     /* Lien Calendly depuis la configuration (une seule source de vérité) */
     document.querySelectorAll("[data-booking]").forEach(function (a) {

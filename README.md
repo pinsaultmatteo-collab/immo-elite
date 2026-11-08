@@ -40,9 +40,14 @@ Deux vidéos verticales, encodées en H.264 dans `assets/video/` à partir des f
 | Page | Vidéo | Fichiers |
 | --- | --- | --- |
 | Page de vente (haut de page) | « Le Club », 50 s (Drive : NOVEMBRE > LE CLUB > LE CLUB VF) | `le-club-1080.mp4` (15 Mo), `le-club-720.mp4` (10 Mo), `le-club-poster.jpg` |
+| Page de vente (témoignages) | « Témoignage Pablo », 1 min 07 (Drive : NOVEMBRE > TÉMOIGNAGE PABLO), coupé avant l'appel « Commente AUDIT » propre à Instagram | `temoignage-pablo-1080.mp4` (16 Mo), `temoignage-pablo-720.mp4` (10 Mo), `temoignage-pablo-poster.jpg` |
 | Page de liens `/liens` | « Mon histoire », 1 min 32 | `mon-histoire-1080.mp4` (26 Mo), `mon-histoire-720.mp4` (16 Mo), `mon-histoire-poster.jpg` |
 
-Réglage dans `assets/js/config.js` : `video` pour la page de vente, `storyVideo` pour la page de liens. Les écrans de 720 px et moins reçoivent la version 720p.
+Réglage dans `assets/js/config.js` : `video` pour la page de vente, `testimonialVideo` pour le témoignage, `storyVideo` pour la page de liens.
+
+Photos de chantier (Drive : B-ROLLS MATTEO) converties en WebP dans `assets/img/chantiers/` : 9 vignettes pour la galerie « Sur le terrain » et `bandeau-surelevation.webp` pour le bandeau en parallaxe.
+
+Réseaux sociaux dans `config.js` (`socials`) : Instagram, YouTube, TikTok. LinkedIn s'affiche automatiquement dès que son lien est renseigné. Les écrans de 720 px et moins reçoivent la version 720p.
 
 La lecture démarre au clic, avec le son, jamais toute seule. La vidéo se met en pause quand le cadre sort de l'écran. Pour ré-encoder après un nouveau montage :
 
