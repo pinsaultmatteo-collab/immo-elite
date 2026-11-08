@@ -36,12 +36,12 @@ window.IE_CONFIG = {
     duration: "1 min 07"
   },
 
-  // Réseaux sociaux. Un lien vide masque l'icône (LinkedIn en attente de l'adresse du profil).
+  // Réseaux sociaux. Un lien vide masque l'icône.
   socials: {
     instagram: "https://www.instagram.com/matteo_pinsault/",
     youtube: "https://www.youtube.com/@Matt%C3%A9oPinsault",
     tiktok: "https://www.tiktok.com/@matteo_pinsault",
-    linkedin: ""
+    linkedin: "https://www.linkedin.com/in/matt%C3%A9o-pinsault-3a5840156/"
   },
 
   // Identifiant Vimeo de la vidéo verticale (prioritaire sur `video` s'il est rempli).
