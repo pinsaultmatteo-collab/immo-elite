@@ -210,7 +210,9 @@ Les deux outils se chargent sur toutes les pages dès l'arrivée du visiteur (`a
 | Clic sur un bouton d'appel découverte | Lead | generate_lead |
 | Page merci, une fois par commande | Purchase 97 € | purchase 97 € (dont 16,17 € de TVA), identifiant = session Stripe |
 
-Dans GA4, marquer `purchase` et `generate_lead` comme événements clés (Administration > Événements). Le flux GA4 est déclaré sur `www.immoelite-formation.fr` mais mesure aussi `club.immoelite-formation.fr` (même domaine racine).
+Dans GA4, marquer `purchase` et `generate_lead` comme événements clés (Administration > Événements).
+
+**Après chaque modification d'un fichier JS ou CSS**, changer le numéro `?v=` dans les balises des pages (ex. `config.js?v=20261108`) pour forcer les navigateurs à recharger. Les scripts sont aussi revalidés à chaque visite (`vercel.json`). Le flux GA4 est déclaré sur `www.immoelite-formation.fr` mais mesure aussi `club.immoelite-formation.fr` (même domaine racine).
 
 ## 6. Questions restées ouvertes (brief, dernière section)
 
