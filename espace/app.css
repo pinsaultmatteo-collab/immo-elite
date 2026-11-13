@@ -501,6 +501,18 @@ dialog { color: var(--ink); }
 .nego-line em.nego--up { color: var(--no); }
 .nego-pct { font-family: var(--font-body); font-size: 0.72rem; font-weight: 700; color: var(--ok); }
 .suivi-form .form-submit { justify-content: flex-start; }
+.nego-step span small { font-size: 0.78rem; color: var(--muted); }
+.nego-step--vendeur span { color: var(--ink); }
+.nego-step em { display: inline-flex; align-items: center; gap: 6px; }
+.nego-note { grid-column: 1 / -1; margin-top: 2px; font-size: 0.8rem; font-style: italic; color: var(--muted); }
+.nego-del { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; color: var(--muted); }
+.nego-del:hover { background: var(--sand-2); color: var(--no); }
+.nego-del .ic { width: 13px; height: 13px; }
+.nego-add { padding-top: 14px; border-top: 1px solid var(--line); gap: 12px; }
+.nego-add-title { font-weight: 700; font-size: 0.92rem; }
+.nego-add .form-row, .suivi-form .form-row { grid-template-columns: 1fr; gap: 12px; }
+.nego-add .form-submit, .suivi-form .form-submit { justify-content: flex-start; }
+.suivi-form { padding-top: 14px; border-top: 1px solid var(--line); }
 .facts li strong { font-weight: 800; }
 .gstatus { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: var(--radius-sm); background: var(--ok-bg); color: var(--ok); font-size: 0.94rem; }
 .gstatus .ic { flex: none; margin-top: 1px; }

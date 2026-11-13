@@ -998,6 +998,7 @@ function bienStatus(b) {
 
 function bienCard(b) {
   const k = calc(b);
+  const lastNego = negoSteps(b).slice(-1)[0];
   const unread = isAdmin() ? b.nonLu?.matteo : b.nonLu?.client;
   const cover = b.photos[0];
   return h("li", {},
@@ -1010,7 +1011,7 @@ function bienCard(b) {
           h("span", {}, h("em", {}, "Prix affiché"), h("strong", {}, eur(b.prix))),
           h("span", {}, h("em", {}, "Rendement brut"), h("strong", {}, pct(k.brut))),
           b.verdict?.prixCible != null && h("span", {}, h("em", {}, "Prix cible"), h("strong", {}, eur(b.verdict.prixCible))),
-          b.prixOffre != null && h("span", {}, h("em", {}, "Offre"), h("strong", {}, eur(b.prixOffre), nego(b.prix, b.prixOffre) && h("small", { class: "nego-pct" }, " " + nego(b.prix, b.prixOffre).pct))),
+          lastNego && h("span", {}, h("em", {}, lastNego.par === "vendeur" ? "Contre-prop. vendeur" : "Offre"), h("strong", {}, eur(lastNego.montant), nego(b.prix, lastNego.montant) && h("small", { class: "nego-pct" }, " " + nego(b.prix, lastNego.montant).pct))),
           b.prixAccepte != null && h("span", {}, h("em", {}, "Accepté"), h("strong", {}, eur(b.prixAccepte), nego(b.prix, b.prixAccepte) && h("small", { class: "nego-pct" }, " " + nego(b.prix, b.prixAccepte).pct))),
         ),
         h("p", { class: "bien-foot" }, b.dateVisite ? "Visité le " + fmtDay(b.dateVisite) : "Ajouté " + rel(b.createdAt)),
@@ -1039,33 +1040,86 @@ function negoLine(label, prix, montant) {
   );
 }
 
+/** Étapes de négociation (l'ancien « prix de l'offre » unique apparaît comme première étape). */
+function negoSteps(b) {
+  if (Array.isArray(b.negociation)) return b.negociation;
+  return b.prixOffre != null ? [{ id: "", par: "acheteur", montant: b.prixOffre, date: String(b.suiviLe || "").slice(0, 10), note: "", ajoutePar: "" }] : [];
+}
+
+const stepLabel = (c, n) => (n.par === "vendeur" ? "Contre-proposition du vendeur" : isAdmin() ? `Offre de ${c.prenom}` : "Ton offre");
+
+function negoStep(c, b, n) {
+  const e = nego(b.prix, n.montant);
+  const canDelete = n.id && (isAdmin() || n.ajoutePar === "client");
+  return h("div", { class: "nego-line nego-step nego-step--" + n.par },
+    h("span", {}, stepLabel(c, n), n.date && h("small", {}, " · " + fmtDay(n.date))),
+    h("strong", {}, eur(n.montant)),
+    h("em", { class: e && e.diff < 0 ? "nego--down" : e && e.diff > 0 ? "nego--up" : "" },
+      e ? (e.diff === 0 ? "au prix affiché" : `${e.euros} · ${e.pct}`) : "",
+      canDelete && h("button", { class: "nego-del", type: "button", title: "Retirer cette étape", "aria-label": "Retirer cette étape", onclick: async () => {
+        if (await confirmBox(`Retirer l'étape « ${stepLabel(c, n)} à ${eur(n.montant)} » ?`, "Retirer")) act("bien.nego.delete", { id: b.id, stepId: n.id }, { ok: "Étape retirée." });
+      } }, icon("x")),
+    ),
+    n.note && h("p", { class: "nego-note" }, n.note),
+  );
+}
+
 function suiviCard(b) {
-  const offreField = field("Prix de l'offre (€)", money("prixOffre", b.prixOffre, { placeholder: "Ex. 172 000" }), "Le montant proposé au vendeur.");
-  const accepteField = field("Prix accepté (€)", money("prixAccepte", b.prixAccepte, { placeholder: "Ex. 175 000" }), "Le prix final, après négociation.");
-  const show = (suivi) => { offreField.hidden = !OFFRES.includes(suivi); accepteField.hidden = !ACCEPTES.includes(suivi); };
-  show(b.suivi || "");
-  const form = h("form", { class: "form suivi-form", onsubmit: (e) => {
+  const c = state.client;
+  const steps = negoSteps(b);
+  const last = steps[steps.length - 1];
+
+  // Ajouter une étape : par défaut, l'autre partie que la dernière à avoir proposé.
+  const stepForm = h("form", { class: "form nego-add", onsubmit: (e) => {
     e.preventDefault();
-    busy(form, async () => {
-      const v = formValues(form);
-      await act("bien.suivi", { id: b.id, suivi: v.suivi, prixOffre: OFFRES.includes(v.suivi) ? v.prixOffre : null, prixAccepte: ACCEPTES.includes(v.suivi) ? v.prixAccepte : null }, { ok: "Suivi mis à jour." });
+    busy(stepForm, async () => {
+      const v = formValues(stepForm);
+      if (!toNum(v.montant)) throw new Error("Indique le montant proposé.");
+      await act("bien.nego.add", { id: b.id, par: v.par, montant: v.montant, date: v.date, note: v.note }, { ok: v.par === "vendeur" ? "Contre-proposition ajoutée." : "Offre ajoutée." });
+    });
+  } },
+    h("p", { class: "nego-add-title" }, steps.length ? "Nouvelle étape de la négociation" : "Première offre"),
+    h("div", { class: "form-row" },
+      field("Qui propose ?", select("par", last?.par === "acheteur" ? "vendeur" : "acheteur", [["acheteur", T("Mon offre", `Offre de ${c.prenom}`)], ["vendeur", "Contre-proposition du vendeur"]])),
+      field("Montant (€)", money("montant", null, { required: true, placeholder: "Ex. 245 000" })),
+    ),
+    h("div", { class: "form-row" },
+      field("Date", input("date", today(), { type: "date" })),
+      field("Précision (facultatif)", input("note", "", { maxlength: 200, placeholder: "Ex. sans condition suspensive" })),
+    ),
+    h("div", { class: "form-submit" }, submitButton(steps.length ? "Ajouter l'étape" : "Ajouter l'offre", "btn--dark btn--sm")),
+  );
+
+  // Où en est le logement, et prix final si l'offre est acceptée.
+  const accepteField = field("Prix accepté (€)", money("prixAccepte", b.prixAccepte ?? "", { placeholder: last ? String(last.montant) : "Ex. 175 000" }), "Le prix final, après négociation.");
+  const show = (suivi) => {
+    accepteField.hidden = !ACCEPTES.includes(suivi);
+    const inp = accepteField.querySelector("input");
+    if (!accepteField.hidden && !inp.value && last) inp.value = String(last.montant);
+  };
+  const statusForm = h("form", { class: "form suivi-form", onsubmit: (e) => {
+    e.preventDefault();
+    busy(statusForm, async () => {
+      const v = formValues(statusForm);
+      await act("bien.suivi", { id: b.id, suivi: v.suivi, prixAccepte: ACCEPTES.includes(v.suivi) ? v.prixAccepte : null }, { ok: "Suivi mis à jour." });
     });
   } },
     field("Où en est ce logement ?", select("suivi", b.suivi, SUIVIS, { onchange: (e) => show(e.target.value) })),
-    offreField,
     accepteField,
-    h("div", { class: "form-submit" }, submitButton("Enregistrer le suivi", "btn--dark btn--sm")),
+    h("div", { class: "form-submit" }, submitButton("Enregistrer le suivi", "btn--ghost btn--sm")),
   );
-  const hasNego = b.prix != null && (b.prixOffre != null || b.prixAccepte != null);
+  show(b.suivi || "");
+
   return card({},
     cardHead("Suivi et négociation"),
-    hasNego && h("div", { class: "nego" },
+    (steps.length > 0 || b.prixAccepte != null) && b.prix != null && h("div", { class: "nego" },
       negoLine("Prix affiché", null, b.prix),
-      b.prixOffre != null && negoLine("Offre faite", b.prix, b.prixOffre),
+      steps.map((n) => negoStep(c, b, n)),
       b.prixAccepte != null && negoLine("Prix accepté", b.prix, b.prixAccepte),
       b.verdict?.prixCible != null && negoLine("Prix cible de Mattéo", b.prix, b.verdict.prixCible),
     ),
-    form,
+    stepForm,
+    statusForm,
   );
 }
 

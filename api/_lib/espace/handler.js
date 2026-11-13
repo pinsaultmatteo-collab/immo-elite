@@ -46,6 +46,7 @@ const EXPLOITATIONS = ["", "nue", "meublee", "colocation", "courte-duree", "mixt
 const AVIS = ["feu-vert", "a-negocier", "a-ecarter"];
 const SUIVIS = ["", "offre", "offre-acceptee", "compromis", "acte", "abandonne"];
 const ACCEPTES = ["offre-acceptee", "compromis", "acte"]; // suivis où un prix final a été accepté
+const SUIVI_LABELS = { offre: "Offre faite", "offre-acceptee": "Offre acceptée", compromis: "Compromis signé", acte: "Acte signé", abandonne: "Piste abandonnée" };
 const CATEGORIES_CARNET = ["courtier", "banque", "notaire", "artisan", "comptable", "conciergerie", "agent", "autre"];
 
 /* ------------------------------------------------------------------ */
@@ -176,6 +177,35 @@ function bienFields(b = {}) {
     question: text(b.question, 1500),
   };
 }
+
+/* ---------- Négociation d'un logement ---------- */
+
+/** Étapes de négociation. Reprend l'ancien « prix de l'offre » unique comme première étape. */
+function ensureNego(b) {
+  if (Array.isArray(b.negociation)) return b.negociation;
+  b.negociation = [];
+  if (b.prixOffre != null) {
+    b.negociation.push({ id: newId("n_"), par: "acheteur", montant: b.prixOffre, date: String(b.suiviLe || b.updatedAt || nowIso()).slice(0, 10), note: "", ajoutePar: "", createdAt: nowIso() });
+  }
+  return b.negociation;
+}
+
+const sortNego = (list) => list.sort((x, y) => (x.date + x.createdAt).localeCompare(y.date + y.createdAt));
+
+/** « Prix de l'offre » = dernière offre du client, pour les cartes et les e-mails. */
+function syncOffre(b) {
+  const last = [...b.negociation].reverse().find((n) => n.par === "acheteur");
+  b.prixOffre = last ? last.montant : null;
+}
+
+function ecartPrix(prix, v) {
+  if (v == null || !prix) return "";
+  const diff = v - prix, pct = ((Math.abs(diff) / prix) * 100).toFixed(1).replace(".", ",");
+  return diff === 0 ? " (au prix affiché)" : ` (${diff < 0 ? "−" : "+"}${eur(Math.abs(diff))}, soit ${pct} % ${diff < 0 ? "sous le" : "au-dessus du"} prix affiché)`;
+}
+
+const negoDetails = (d, b) =>
+  (b.negociation || []).map((n) => [`${n.par === "vendeur" ? "Contre-proposition du vendeur" : `Offre de ${d.prenom}`} (${n.date.split("-").reverse().join("/")})`, eur(n.montant) + ecartPrix(b.prix, n.montant) + (n.note ? ` — ${n.note}` : "")]);
 
 function sessionFields(s = {}) {
   return {
@@ -556,41 +586,86 @@ const ACTIONS = {
   "bien.suivi": {
     async run({ request, who, body }) {
       const cid = clientIdOf(who, body);
-      const labels = { offre: "Offre faite", "offre-acceptee": "Offre acceptée", compromis: "Compromis signé", acte: "Acte signé", abandonne: "Piste abandonnée" };
       let changed = false;
       const { data } = await change(cid, (d) => {
         changed = false;
         const b = find(d.biens, body.id, "Logement");
+        ensureNego(b);
         const suivi = oneOf(body.suivi, SUIVIS, b.suivi);
-        const keep = (field) => (body[field] !== undefined ? num(body[field], { dec: 0 }) : b[field] ?? null);
-        const prixOffre = suivi === "" ? null : keep("prixOffre");
-        const prixAccepte = ACCEPTES.includes(suivi) ? keep("prixAccepte") : null;
-        if (suivi === b.suivi && prixOffre === (b.prixOffre ?? null) && prixAccepte === (b.prixAccepte ?? null)) return;
+        const prixAccepte = ACCEPTES.includes(suivi) ? (body.prixAccepte !== undefined ? num(body.prixAccepte, { dec: 0 }) : b.prixAccepte ?? null) : null;
+        if (suivi === b.suivi && prixAccepte === (b.prixAccepte ?? null)) return;
         changed = true;
         const before = b.suivi;
-        Object.assign(b, { suivi, prixOffre, prixAccepte, suiviLe: nowIso() });
-        if (labels[suivi]) {
-          const montant = suivi === "offre" ? prixOffre : ACCEPTES.includes(suivi) ? prixAccepte ?? prixOffre : null;
-          log(d, side(who), "suivi", `${labels[suivi]}${montant != null ? ` à ${eur(montant)}` : ""} : ${b.titre}`, b.id);
+        Object.assign(b, { suivi, prixAccepte, suiviLe: nowIso() });
+        if (SUIVI_LABELS[suivi]) {
+          const montant = suivi === "offre" ? b.prixOffre : ACCEPTES.includes(suivi) ? prixAccepte ?? b.prixOffre : null;
+          log(d, side(who), "suivi", `${SUIVI_LABELS[suivi]}${montant != null ? ` à ${eur(montant)}` : ""} : ${b.titre}`, b.id);
         } else if (before && !suivi) log(d, side(who), "suivi", `Suivi remis à zéro : ${b.titre}`, b.id);
       });
       // Une offre (ou son issue) saisie par le client : Mattéo est prévenu.
       const b = data.biens.find((x) => x.id === body.id);
-      if (changed && who.role !== "admin" && labels[b.suivi]) {
-        const ecart = (v) => {
-          if (v == null || !b.prix) return "";
-          const diff = v - b.prix, pct = ((Math.abs(diff) / b.prix) * 100).toFixed(1).replace(".", ",");
-          return diff === 0 ? " (au prix affiché)" : ` (${diff < 0 ? "−" : "+"}${eur(Math.abs(diff))}, soit ${pct} % ${diff < 0 ? "sous le" : "au-dessus du"} prix affiché)`;
-        };
+      if (changed && who.role !== "admin" && SUIVI_LABELS[b.suivi]) {
         await notify({
           to: notifyAddress(), replyTo: who.email,
-          subject: `${fullName(data)} — ${labels[b.suivi]} : ${b.titre}`,
-          eyebrow: "Suivi d'un logement", title: `${labels[b.suivi]} — ${b.titre}`,
+          subject: `${fullName(data)} — ${SUIVI_LABELS[b.suivi]} : ${b.titre}`,
+          eyebrow: "Suivi d'un logement", title: `${SUIVI_LABELS[b.suivi]} — ${b.titre}`,
           lines: [`${fullName(data)} a mis à jour le suivi de ce logement.`],
-          details: [["Prix affiché", b.prix != null ? eur(b.prix) : ""], ["Prix de l'offre", b.prixOffre != null ? eur(b.prixOffre) + ecart(b.prixOffre) : ""], ["Prix accepté", b.prixAccepte != null ? eur(b.prixAccepte) + ecart(b.prixAccepte) : ""]],
+          details: [["Prix affiché", b.prix != null ? eur(b.prix) : ""], ...negoDetails(data, b), ["Prix accepté", b.prixAccepte != null ? eur(b.prixAccepte) + ecartPrix(b.prix, b.prixAccepte) : ""]],
           cta: { label: "Ouvrir le logement", url: `${espaceUrl(request)}#/c/${cid}/logements/${b.id}` },
         });
       }
+      return reply(who, data);
+    },
+  },
+
+  /** Ajoute une étape de négociation : offre du client ou contre-proposition du vendeur. */
+  "bien.nego.add": {
+    async run({ request, who, body }) {
+      const cid = clientIdOf(who, body);
+      const par = oneOf(body.par, ["acheteur", "vendeur"], "");
+      if (!par) fail(400, "Indique qui fait la proposition.");
+      const montant = num(body.montant, { min: 1, dec: 0 });
+      if (!montant) fail(400, "Indique le montant proposé.");
+      const stepId = newId("n_"); // fixé hors de change() : une étape n'est jamais ajoutée deux fois
+      const step = { id: stepId, par, montant, date: date(body.date) || nowIso().slice(0, 10), note: line(body.note, 200), ajoutePar: side(who) };
+      const label = par === "vendeur" ? "Contre-proposition du vendeur" : "Offre";
+      const { data } = await change(cid, (d) => {
+        const b = find(d.biens, body.id, "Logement");
+        const list = ensureNego(b);
+        if (list.some((x) => x.id === stepId)) return;
+        list.push({ ...step, createdAt: nowIso() });
+        sortNego(list);
+        syncOffre(b);
+        if (!b.suivi) { b.suivi = "offre"; b.suiviLe = nowIso(); }
+        log(d, side(who), "suivi", `${label} à ${eur(montant)} : ${b.titre}`, b.id);
+      });
+      const b = data.biens.find((x) => x.id === body.id);
+      if (who.role !== "admin") {
+        await notify({
+          to: notifyAddress(), replyTo: who.email,
+          subject: `${fullName(data)} — ${par === "vendeur" ? "Contre-proposition du vendeur" : "Nouvelle offre"} : ${b.titre}`,
+          eyebrow: "Négociation", title: `${label} à ${eur(montant)} — ${b.titre}`,
+          lines: [`${fullName(data)} a ajouté une étape à la négociation.`, step.note],
+          details: [["Prix affiché", b.prix != null ? eur(b.prix) : ""], ...negoDetails(data, b)],
+          cta: { label: "Ouvrir le logement", url: `${espaceUrl(request)}#/c/${cid}/logements/${b.id}` },
+        });
+      }
+      return reply(who, data);
+    },
+  },
+
+  "bien.nego.delete": {
+    async run({ who, body }) {
+      const cid = clientIdOf(who, body);
+      const { data } = await change(cid, (d) => {
+        const b = find(d.biens, body.id, "Logement");
+        const list = ensureNego(b);
+        const step = list.find((x) => x.id === body.stepId);
+        if (!step) fail(404, "Étape introuvable.");
+        if (who.role !== "admin" && step.ajoutePar !== "client") fail(403, "Seul Mattéo peut retirer cette étape.");
+        b.negociation = list.filter((x) => x.id !== step.id);
+        syncOffre(b);
+      });
       return reply(who, data);
     },
   },
