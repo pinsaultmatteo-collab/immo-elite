@@ -15,6 +15,8 @@ const state = {
   commun: { reglages: {}, carnet: [] },
   admin: null, // { clients, aTraiter } pour l'accueil de Mattéo
   maxFileMb: 50,
+  preview: false, // aperçu : Mattéo voit l'espace comme le client, en lecture seule
+  previewId: "",
   google: { configured: false, connected: false }, // connexion Google Agenda (vue coach)
   loadedAt: 0,
   error: "",
@@ -83,6 +85,7 @@ const ICONS = {
   settings: '<circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/>',
   target: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1"/>',
   x: '<path d="M6 6l12 12M18 6 6 18"/>',
+  eye: '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/>',
   shield: '<path d="M12 3 5 6v5.5c0 4.4 2.9 7.9 7 9.5 4.1-1.6 7-5.1 7-9.5V6z"/><path d="m9 12 2.2 2.2L15 10.2"/>',
   send: '<path d="M4 12 20 4l-5 16-3.5-6.5z"/><path d="m11.5 13.5 4-5"/>',
 };
@@ -148,14 +151,17 @@ function rel(iso) {
   return "le " + fmtIso(iso);
 }
 
-const isAdmin = () => state.me?.role === "admin";
+/** Mattéo connecté (même en aperçu). */
+const isCoach = () => state.me?.role === "admin";
+/** Affichage côté coach. En aperçu, Mattéo voit l'interface du client : isAdmin() est faux. */
+const isAdmin = () => isCoach() && !state.preview;
 const T = (client, admin) => (isAdmin() ? admin : client);
 const mine = () => (isAdmin() ? "matteo" : "client");
-const base = () => (isAdmin() && route.clientId ? `/c/${route.clientId}` : "");
+const base = () => (isCoach() && route.clientId ? `/c/${route.clientId}` : "");
 const href = (p = "/") => "#" + base() + p;
 const go = (p) => { location.hash = base() + p; };
-const withClient = (payload = {}) => (isAdmin() && route.clientId ? { clientId: route.clientId, ...payload } : payload);
-const fileUrl = (id, dl) => `${API}?action=file&d=${encodeURIComponent(id)}${isAdmin() ? `&c=${encodeURIComponent(route.clientId)}` : ""}${dl ? "&dl=1" : ""}`;
+const withClient = (payload = {}) => (isCoach() && route.clientId ? { clientId: route.clientId, ...payload } : payload);
+const fileUrl = (id, dl) => `${API}?action=file&d=${encodeURIComponent(id)}${isCoach() ? `&c=${encodeURIComponent(route.clientId)}` : ""}${dl ? "&dl=1" : ""}`;
 
 function waLink() {
   let d = String(state.commun.reglages?.whatsapp || "").replace(/\D/g, "");
@@ -167,7 +173,11 @@ function waLink() {
 
 /* ---------- Appels au serveur ---------- */
 
+// En aperçu, seule la lecture est permise : aucun envoi, aucune modification, rien n'est marqué comme lu.
+const PREVIEW_OK = new Set(["me", "space.get"]);
+
 async function api(action, payload = {}) {
+  if (state.preview && !PREVIEW_OK.has(action)) throw new Error("Aperçu : rien n'est modifiable ici. Quitte l'aperçu pour agir.");
   let res;
   try {
     res = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin", body: JSON.stringify({ action, ...payload }) });
@@ -189,6 +199,7 @@ async function api(action, payload = {}) {
 
 /** Action qui modifie l'espace : met à jour l'affichage avec la réponse du serveur. */
 async function act(action, payload = {}, { ok, quiet } = {}) {
+  if (state.preview && /\.seen$/.test(action)) return null; // l'aperçu ne marque rien comme lu
   try {
     const res = await api(action, withClient(payload));
     if (res.client) { state.client = res.client; state.loadedAt = Date.now(); }
@@ -210,7 +221,7 @@ async function whoAmI() {
 }
 
 async function loadSpace() {
-  const res = await api("space.get", withClient());
+  const res = await api("space.get", withClient(state.preview ? { preview: true } : {}));
   state.client = res.client;
   state.commun = res.commun;
   state.maxFileMb = res.maxFileMb || 50;
@@ -553,6 +564,26 @@ async function logout() {
   render();
 }
 
+async function setPreview(on) {
+  state.preview = on;
+  state.previewId = on ? route.clientId : "";
+  state.client = null;
+  closeDialogs();
+  render();
+  try { await loadSpace(); } catch (e) { state.error = e.message; }
+  render();
+  window.scrollTo(0, 0);
+}
+
+function previewBar() {
+  const c = state.client;
+  return h("div", { class: "preview-bar", role: "status" },
+    icon("eye"),
+    h("span", {}, "Aperçu : tu vois l'espace exactement comme ", h("strong", {}, c ? c.prenom : "ton client"), ". Rien n'est modifiable, rien n'est marqué comme lu."),
+    h("button", { class: "btn btn--gold btn--sm", type: "button", onclick: () => setPreview(false) }, "Quitter l'aperçu"),
+  );
+}
+
 function shell(content) {
   const items = navItems();
   const link = (it, cls) => h("a", { class: cls + (route.page === it.page ? " active" : ""), href: href(it.path), "aria-current": route.page === it.page ? "page" : null }, icon(it.ic), h("span", {}, it.label), it.count > 0 && h("b", { class: "count" }, it.count));
@@ -563,10 +594,13 @@ function shell(content) {
       h("p", { class: "side-tag" }, isAdmin() ? "Espace coach" : "Espace client"),
       inClient && h("a", { class: "side-back", href: "#/" }, icon("back"), "Tous les clients"),
       inClient && state.client && h("p", { class: "side-client" }, state.client.prenom + " " + state.client.nom),
+      inClient && state.client && h("button", { class: "side-back", type: "button", onclick: () => setPreview(true) }, icon("eye"), "Voir comme " + state.client.prenom),
       h("nav", { class: "side-nav", "aria-label": "Navigation principale" }, items.map((it) => link(it, "side-link"))),
       h("div", { class: "side-foot" },
-        h("p", { class: "side-who" }, h("strong", {}, state.me.prenom || "Connecté"), h("span", {}, state.me.email)),
-        h("button", { class: "side-logout", type: "button", onclick: logout }, icon("logout"), "Se déconnecter"),
+        state.preview && state.client
+          ? h("p", { class: "side-who" }, h("strong", {}, state.client.prenom), h("span", {}, state.client.emails[0]))
+          : h("p", { class: "side-who" }, h("strong", {}, state.me.prenom || "Connecté"), h("span", {}, state.me.email)),
+        !state.preview && h("button", { class: "side-logout", type: "button", onclick: logout }, icon("logout"), "Se déconnecter"),
         h("a", { class: "side-legal", href: PRIVACY_URL, target: "_blank", rel: "noopener" }, "Confidentialité"),
       ),
     ),
@@ -574,9 +608,9 @@ function shell(content) {
       inClient ? h("a", { class: "top-back", href: "#/", "aria-label": "Tous les clients" }, icon("back")) : null,
       h("a", { class: "brand", href: isAdmin() ? "#/" : href("/") }, "IMMO ", h("em", {}, "Élite")),
       h("span", { class: "top-tag" }, inClient && state.client ? state.client.prenom : isAdmin() ? "Coach" : "Espace client"),
-      h("button", { class: "icon-btn top-logout", type: "button", "aria-label": "Se déconnecter", onclick: logout }, icon("logout")),
+      !state.preview && h("button", { class: "icon-btn top-logout", type: "button", "aria-label": "Se déconnecter", onclick: logout }, icon("logout")),
     ),
-    h("main", { class: "main" }, h("div", { class: "page" }, content)),
+    h("main", { class: "main" }, state.preview && previewBar(), h("div", { class: "page" }, content)),
     h("nav", { class: "tabs", "aria-label": "Navigation" }, items.map((it) => link(it, "tab"))),
   );
 }
@@ -725,6 +759,7 @@ function viewAccueil() {
       title: T(`Bonjour ${c.prenom}`, `${c.prenom} ${c.nom}`),
       lead: parcoursLine(p),
       actions: isAdmin() && [
+        h("button", { class: "btn btn--ghost btn--sm", type: "button", onclick: () => setPreview(true) }, icon("eye"), "Voir comme " + c.prenom),
         h("button", { class: "btn btn--ghost btn--sm", type: "button", onclick: () => clientDialog(c) }, icon("edit"), "Modifier la fiche"),
         h("button", { class: "btn btn--ghost btn--sm", type: "button", onclick: async () => { if (await confirmBox(`Envoyer à ${c.emails[0]} l'e-mail d'invitation à son espace ?`, "Envoyer", false)) { const r = await act("admin.client.invite", { id: c.id }, { quiet: true }); if (r) toast("Invitation envoyée."); } } }, icon("send"), "Inviter"),
       ],
@@ -1556,6 +1591,7 @@ async function onRoute() {
   route = parseRoute();
   if (!state.me) return render();
   state.error = "";
+  if (state.preview && route.clientId !== state.previewId) { state.preview = false; state.client = null; }
   try {
     if (isAdmin() && !route.clientId) {
       state.client = null;

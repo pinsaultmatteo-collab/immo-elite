@@ -259,6 +259,10 @@ la même chose que le client, avec en plus les boutons pour ajouter une session,
 un verdict, ajouter une action, tenir des notes privées (jamais visibles du client). Réglages communs :
 numéro WhatsApp, lien de visio, lien de prise de rendez-vous.
 
+**Voir comme le client** (bouton sur l'accueil du client et dans le menu) : Mattéo voit l'espace exactement comme
+son client, en lecture seule. Aucune modification n'est possible et rien n'est marqué comme lu ; le bandeau
+« Quitter l'aperçu » ramène à la vue coach.
+
 E-mails envoyés automatiquement (même boîte que le club, `contact@`) : code de connexion, nouveau logement à
 analyser (à Mattéo), verdict publié, nouveau document, message sur un logement, invitation à l'espace.
 

@@ -406,8 +406,10 @@ const ACTIONS = {
     async run({ who, body }) {
       const cid = clientIdOf(who, body);
       const [data, commun] = await Promise.all([loadClient(cid), readDoc(COMMUN)]);
-      const extra = who.role === "admin" ? { google: await google.googleStatus() } : {};
-      return reply(who, data, { commun: commun || COMMUN_VIDE, maxFileMb: Math.round(maxFileBytes() / 1048576), ...extra });
+      // Aperçu : Mattéo reçoit exactement ce que voit le client (sans notes privées ni réglages Google).
+      const preview = who.role === "admin" && body.preview === true;
+      const extra = who.role === "admin" && !preview ? { google: await google.googleStatus() } : {};
+      return reply(preview ? { role: "client" } : who, data, { commun: commun || COMMUN_VIDE, maxFileMb: Math.round(maxFileBytes() / 1048576), ...extra });
     },
   },
 
