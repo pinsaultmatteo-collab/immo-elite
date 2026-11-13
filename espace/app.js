@@ -319,12 +319,22 @@ function calc(b) {
 
 /* ---------- Composants ---------- */
 
+const canPopover = typeof HTMLElement !== "undefined" && "popover" in HTMLElement.prototype;
+
 function toast(message, kind = "ok") {
   let box = document.querySelector(".toasts");
-  if (!box) { box = h("div", { class: "toasts", role: "status", "aria-live": "polite" }); document.body.append(box); }
+  if (!box) { box = h("div", { class: "toasts", role: "status", "aria-live": "polite", popover: canPopover ? "manual" : null }); document.body.append(box); }
   const t = h("div", { class: "toast toast--" + kind }, icon(kind === "error" ? "x" : "check"), h("span", {}, message));
   box.append(t);
-  setTimeout(() => { t.classList.add("out"); setTimeout(() => t.remove(), 300); }, kind === "error" ? 6000 : 3200);
+  // Toujours au-dessus d'une fenêtre ouverte : la boîte repasse en dernier dans la couche supérieure.
+  if (canPopover) { try { if (box.matches(":popover-open")) box.hidePopover(); box.showPopover(); } catch (_) { /* affichage simple */ } }
+  setTimeout(() => {
+    t.classList.add("out");
+    setTimeout(() => {
+      t.remove();
+      if (canPopover && !box.children.length) { try { box.hidePopover(); } catch (_) { /* déjà fermée */ } }
+    }, 300);
+  }, kind === "error" ? 9000 : 3200);
 }
 
 function dialog({ title, body, wide }) {

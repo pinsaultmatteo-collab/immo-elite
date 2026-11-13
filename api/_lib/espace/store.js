@@ -68,6 +68,11 @@ const local = {
   },
 
   /** Comparer puis écrire, d'un seul tenant : deux écritures simultanées ne peuvent pas se marcher dessus. */
+  async etagFormats(p) {
+    const r = await local.readJson(p);
+    return { lecture: r?.etag || "", meta: r?.etag || "" };
+  },
+
   async writeJson(p, data, { etag } = {}) {
     const file = localFile(p);
     return withLock(file, async () => {
@@ -132,12 +137,32 @@ async function signedPutToken() {
 const blob = {
   name: "vercel-blob",
 
-  async readJson(p) {
-    const { get } = await sdk();
+  /**
+   * `withEtag` : pour une modification, l'empreinte (ETag) est prise dans les métadonnées du fichier,
+   * lues AVANT le contenu. Celle de la lecture peut être transformée en route (compression des gros
+   * fichiers : « W/… ») et ne correspond alors plus jamais : toute modification était refusée.
+   * Si le fichier change entre les deux lectures, l'écriture est refusée puis rejouée : rien n'est perdu.
+   */
+  async readJson(p, { withEtag = false } = {}) {
+    const { get, head, BlobNotFoundError } = await sdk();
+    const path = assertPath(p);
+    let etag = "";
+    if (withEtag) {
+      try { etag = (await head(path)).etag; } catch (e) { if (e instanceof BlobNotFoundError) return null; throw e; }
+    }
     // useCache: false → on lit toujours la dernière version, jamais une copie en cache.
-    const r = await get(assertPath(p), { access: "private", useCache: false });
+    const r = await get(path, { access: "private", useCache: false });
     if (!r || r.statusCode !== 200 || !r.stream) return null;
-    return { data: JSON.parse(await new Response(r.stream).text()), etag: r.blob.etag };
+    return { data: JSON.parse(await new Response(r.stream).text()), etag: etag || r.blob.etag };
+  },
+
+  /** Diagnostic : empreinte vue à la lecture et dans les métadonnées. */
+  async etagFormats(p) {
+    const { get, head } = await sdk();
+    const meta = await head(assertPath(p));
+    const r = await get(assertPath(p), { access: "private", useCache: false });
+    if (r?.stream) await r.stream.cancel().catch(() => {});
+    return { lecture: r?.blob?.etag || "", meta: meta.etag || "" };
   },
 
   async writeJson(p, data, { etag } = {}) {
@@ -232,7 +257,7 @@ export async function readDoc(p) {
  */
 export async function mutate(p, fn, { fallback } = {}) {
   for (let attempt = 0; attempt < 12; attempt++) {
-    const cur = await storage().readJson(p);
+    const cur = await storage().readJson(p, { withEtag: true });
     if (!cur && fallback === undefined) return undefined;
     const data = cur ? cur.data : structuredClone(fallback);
     const result = await fn(data);
@@ -244,5 +269,6 @@ export async function mutate(p, fn, { fallback } = {}) {
       await new Promise((r) => setTimeout(r, 20 + Math.random() * 90 * (attempt + 1)));
     }
   }
+  console.error(`[espace] Modification refusée 12 fois de suite : ${p}`);
   throw new ConflictError("Trop de modifications simultanées.");
 }

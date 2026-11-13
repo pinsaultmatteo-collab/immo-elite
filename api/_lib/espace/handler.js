@@ -909,11 +909,21 @@ const ACTIONS = {
       steps.push({ label: "Stockage utilisé", ok: !process.env.VERCEL || st.name === "vercel-blob", detail: st.name === "local" ? "Dossier local (démonstration)" : "Vercel Blob privé" });
       steps.push({ label: "Clé de signature (ESPACE_SECRET)", ok: (process.env.ESPACE_SECRET || "").length >= 32 || auth.devMode(), detail: (process.env.ESPACE_SECRET || "").length >= 32 ? "Présente" : auth.devMode() ? "Clé de démonstration (locale uniquement)" : "Absente ou trop courte (32 caractères minimum)" });
       steps.push({ label: "Adresses d'administration", ok: auth.admins().length > 0, detail: `${auth.admins().length} adresse(s)` });
-      if (await run("Écriture d'une donnée", async () => { etag = await st.writeJson(p, { stamp }); })) {
-        await run("Relecture immédiate", async () => { const r = await st.readJson(p); if (r?.data?.stamp !== stamp) throw new Error("La donnée relue ne correspond pas."); etag = r.etag; });
+      // Un fichier de la taille d'une vraie fiche client (quelques Ko), pour tester les mêmes conditions.
+      const filler = Array.from({ length: 60 }, (_, i) => ({ id: newId("x_"), titre: `Ligne de test ${i}`, texte: "Donnée de diagnostic, supprimée à la fin du contrôle." }));
+      if (await run("Écriture d'une donnée", async () => { etag = await st.writeJson(p, { stamp, filler }); })) {
+        await run("Relecture immédiate", async () => { const r = await st.readJson(p, { withEtag: true }); if (r?.data?.stamp !== stamp) throw new Error("La donnée relue ne correspond pas."); etag = r.etag; });
+        await run("Empreintes du fichier (ETag)", async () => { const f = await st.etagFormats(p); return `lecture ${String(f.lecture).slice(0, 40)} · métadonnées ${String(f.meta).slice(0, 40)}`; });
+        await run("Modification d'une donnée existante (comme une session)", async () => {
+          const out = await mutate(p, (d) => { d.v = 2; });
+          if (out?.data?.v !== 2) throw new Error("La modification n'a pas été enregistrée.");
+          const r = await st.readJson(p, { withEtag: true });
+          if (r?.data?.v !== 2) throw new Error("La modification n'a pas été relue.");
+          etag = r.etag;
+        });
         await run("Protection contre deux écritures simultanées", async () => {
-          await st.writeJson(p, { stamp, v: 2 }, { etag });
-          try { await st.writeJson(p, { stamp, v: 3 }, { etag }); } catch (e) { if (e instanceof ConflictError) return "Active"; throw e; }
+          await st.writeJson(p, { stamp, filler, v: 3 }, { etag });
+          try { await st.writeJson(p, { stamp, filler, v: 4 }, { etag }); } catch (e) { if (e instanceof ConflictError) return "Active"; throw e; }
           throw new Error("Une écriture périmée a été acceptée.");
         });
       }
