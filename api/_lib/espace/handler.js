@@ -89,7 +89,7 @@ function viewFor(who, data) {
   const d = structuredClone(data);
   if (who.role !== "admin") {
     delete d.notesPrivees;
-    for (const s of d.sessions) for (const k of ["notesPrivees", "googleEventId", "googleHtmlLink", "googleSync", "googleInvite"]) delete s[k];
+    for (const s of d.sessions) for (const k of ["notesPrivees", "googleEventId", "googleHtmlLink", "googleSync", "googleInvite", "googleError", "googleErrorAt"]) delete s[k];
   }
   for (const doc of d.documents) delete doc.path;
   for (const b of d.biens) for (const p of b.photos) delete p.path;
@@ -227,14 +227,18 @@ async function syncSessionEvent(request, d, s, g) {
     const x = dd.sessions.find((y) => y.id === s.id);
     if (!x) return;
     Object.assign(x, { googleEventId: res.id, googleHtmlLink: res.htmlLink, googleSync: key, googleInvite: attendees.length > 0 });
+    delete x.googleError;
+    delete x.googleErrorAt;
     if (res.meet) x.lien = res.meet;
   });
   return data;
 }
 
+const googleMessage = (e) => (e instanceof google.GoogleError ? e.message : "Erreur inattendue avec Google Agenda.");
 const googleWarning = (prefix, e) => {
-  if (!(e instanceof google.GoogleError)) console.error("[espace] Google Agenda :", e?.stack || e);
-  return `${prefix} ${e instanceof google.GoogleError ? e.message : "Erreur inattendue avec Google Agenda."}`;
+  if (e instanceof google.GoogleError) console.warn(`[espace] Google Agenda (${e.code}) : ${e.message}`);
+  else console.error("[espace] Google Agenda :", e?.stack || e);
+  return `${prefix} ${googleMessage(e)}`;
 };
 
 function clientFields(c = {}) {
@@ -703,6 +707,11 @@ const ACTIONS = {
           out = (await syncSessionEvent(request, data, data.sessions.find((x) => x.id === id), g)) || data;
         } catch (e) {
           warning = googleWarning("La session est enregistrée, mais Google Agenda n'a pas suivi :", e);
+          const saved = await change(cid, (d) => {
+            const x = d.sessions.find((y) => y.id === id);
+            if (x) { x.googleError = googleMessage(e); x.googleErrorAt = nowIso(); }
+          }).catch(() => null);
+          if (saved) out = saved.data;
         }
       }
       if (body.notify === true) {
@@ -871,6 +880,13 @@ const ACTIONS = {
     },
   },
 
+  "google.status": {
+    admin: true,
+    async run() {
+      return { ok: true, google: await google.googleStatus() };
+    },
+  },
+
   "google.disconnect": {
     admin: true,
     async run() {
@@ -914,7 +930,14 @@ const ACTIONS = {
       const gs = await google.googleStatus().catch(() => ({ configured: false }));
       if (!gs.configured) steps.push({ label: "Google Agenda", ok: true, detail: "Non configuré (facultatif)" });
       else if (!gs.connected) steps.push({ label: "Google Agenda", ok: !gs.error, detail: gs.error ? "Connexion expirée : reconnecte Google Agenda ci-dessous" : "Configuré, pas encore connecté" });
-      else await run("Google Agenda", async () => { await google.checkConnection(); return `Connecté (${gs.email || "compte Google"})`; });
+      else if (await run("Google Agenda", async () => { await google.checkConnection(); return `Connecté (${gs.email || "compte Google"})`; })) {
+        await run("Création d'un événement test avec lien Meet (supprimé aussitôt)", async () => {
+          const demain = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+          const ev = await google.upsertEvent({ summary: "IMMO Élite · test de connexion (supprimé aussitôt)", description: "Créé par le diagnostic de l'espace client.", date: demain, heure: "07:00", duree: 15, attendees: [], meet: true, invite: false });
+          await google.deleteEvent(ev.id, { notify: false });
+          return ev.meet ? `Événement et lien Meet créés puis supprimés dans l'agenda ${gs.email || "principal"}` : "Événement créé puis supprimé, mais Google n'a pas fourni de lien Meet";
+        });
+      }
       return { ok: true, steps, allOk: steps.every((s) => s.ok) };
     },
   },

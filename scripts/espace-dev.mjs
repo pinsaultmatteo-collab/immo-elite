@@ -69,6 +69,8 @@ if (FAKE_GOOGLE) {
       const show = (verb, ev) => console.log(`[faux Google] ${verb} : ${ev.summary} · ${ev.start?.dateTime} → ${ev.end?.dateTime} · invités : ${(ev.attendees || []).map((a) => a.email).join(", ") || "aucun"} · e-mails Google : ${notif} · Meet : ${ev.hangoutLink || "non"}`);
       const method = (init.method || "GET").toUpperCase();
       if (method === "POST") {
+        // Pour essayer l'affichage d'une erreur : mettre « [erreur] » dans le titre de la session.
+        if (String(body.summary || "").includes("[erreur]")) return reply({ error: { code: 403, message: "Google Calendar API has not been used in project 123 before or it is disabled." } }, 403);
         const { conferenceData, ...rest } = body;
         const ev = { id: "ev" + letters(10), status: "confirmed", ...rest };
         ev.htmlLink = `https://calendar.google.com/calendar/event?eid=${ev.id}`;

@@ -694,8 +694,17 @@ function viewAccueil() {
 const DUREES = [["30", "30 min"], ["45", "45 min"], ["60", "1 h"], ["90", "1 h 30"], ["120", "2 h"], ["240", "Demi-journée (4 h)"], ["480", "Journée (8 h)"]];
 const isMeet = (u) => /^https:\/\/meet\.google\.com\//.test(u || "");
 
-function sessionDialog(s) {
+function sessionDialog(s, opts = {}) {
   const c = state.client, G = state.google || {};
+  // Page ouverte avant la connexion à Google : on revérifie, et on rouvre le formulaire s'il est encore vierge.
+  if (isAdmin() && G.configured && !G.connected && !opts.recheck) {
+    api("google.status").then((r) => {
+      if (!r.google?.connected) return;
+      state.google = r.google;
+      const open = document.querySelector("dialog[open]");
+      if (open && !open.dataset.touched) { open.close(); sessionDialog(s, { ...opts, recheck: true }); }
+    }).catch(() => {});
+  }
   const cur = s || { type: "individuelle", date: today(), heure: "", duree: 60, statut: "planifiee", titre: "", resume: "", replay: "", lien: "", notesPrivees: "" };
   const linked = Boolean(s?.googleEventId);
   const duree = String(cur.duree || (cur.type === "presentiel" ? 480 : 60));
@@ -705,7 +714,7 @@ function sessionDialog(s) {
   const gBox = G.connected
     ? h("fieldset", { class: "gbox" },
         h("legend", {}, icon("calendar"), "Google Agenda"),
-        h("label", { class: "check" }, h("input", { type: "checkbox", name: "gSync", checked: linked || !s }), h("span", {}, linked ? "Mettre à jour l'événement de mon Google Agenda" : "Ajouter à mon Google Agenda")),
+        h("label", { class: "check" }, h("input", { type: "checkbox", name: "gSync", checked: Boolean(opts.gSync) || linked || !s }), h("span", {}, linked ? "Mettre à jour l'événement de mon Google Agenda" : "Ajouter à mon Google Agenda")),
         h("label", { class: "check" }, h("input", { type: "checkbox", name: "gMeet", checked: s ? (linked ? isMeet(s.lien) : s.type !== "presentiel") : true }), h("span", {}, "Avec un lien Google Meet")),
         h("label", { class: "check" }, h("input", { type: "checkbox", name: "gInvite", checked: s && linked ? Boolean(s.googleInvite) : true }), h("span", {}, `Inviter ${c.prenom} : Google lui envoie l'invitation à ${c.emails[0]}`)),
         linked && safeUrl(s.googleHtmlLink) && h("a", { class: "link", href: safeUrl(s.googleHtmlLink), target: "_blank", rel: "noopener" }, "Voir l'événement dans Google Agenda"),
@@ -714,7 +723,7 @@ function sessionDialog(s) {
       ? h("p", { class: "field-hint" }, G.error ? "La connexion à Google Agenda a expiré : reconnecte-la dans Réglages pour créer les liens Meet." : "Connecte Google Agenda dans Réglages : l'événement et son lien Meet se créeront tout seuls.")
       : null;
 
-  const form = h("form", { class: "form", onsubmit: (e) => {
+  const form = h("form", { class: "form", oninput: () => { form.closest("dialog")?.setAttribute("data-touched", "1"); }, onsubmit: (e) => {
     e.preventDefault();
     busy(form, async (say) => {
       const v = formValues(form);
@@ -765,6 +774,13 @@ function sessionCard(c, s, numero) {
   const done = s.statut === "faite";
   const visio = !done && s.type !== "presentiel" ? safeUrl(s.lien) || safeUrl(state.commun.reglages?.visio) : "";
   const gcal = isAdmin() && !done ? safeUrl(s.googleHtmlLink) : "";
+  const G = state.google || {};
+  const gLine = !isAdmin() || done ? null
+    : s.googleError
+      ? h("p", { class: "gline gline--ko" }, icon("x"), h("span", {}, h("strong", {}, "Pas dans Google Agenda : "), s.googleError, " "), h("button", { class: "link", type: "button", onclick: () => sessionDialog(s, { gSync: true }) }, "Réessayer"))
+      : G.connected && !s.googleEventId && s.date >= today()
+        ? h("p", { class: "gline" }, icon("calendar"), h("span", {}, "Pas encore dans ton Google Agenda. "), h("button", { class: "link", type: "button", onclick: () => sessionDialog(s, { gSync: true }) }, "L'ajouter"))
+        : null;
   return h("li", { class: "session" + (done ? " session--done" : "") },
     h("div", { class: "session-mark" }, done ? icon("check") : icon("clock")),
     h("div", { class: "session-body" },
@@ -776,6 +792,7 @@ function sessionCard(c, s, numero) {
         ),
         isAdmin() && h("button", { class: "icon-btn", type: "button", "aria-label": "Modifier la session", onclick: () => sessionDialog(s) }, icon("edit")),
       ),
+      gLine,
       s.resume && pre(s.resume, "session-resume"),
       (replay || visio || gcal) && h("div", { class: "session-links" },
         visio && h("a", { class: "btn btn--dark btn--sm", href: visio, target: "_blank", rel: "noopener" }, icon("play"), isMeet(visio) ? "Rejoindre sur Google Meet" : "Rejoindre la visio"),

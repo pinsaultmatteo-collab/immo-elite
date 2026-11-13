@@ -488,6 +488,12 @@ dialog { color: var(--ink); }
 .gbox .link { justify-self: start; }
 .gstatus { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: var(--radius-sm); background: var(--ok-bg); color: var(--ok); font-size: 0.94rem; }
 .gstatus .ic { flex: none; margin-top: 1px; }
+.gline { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 6px 8px; padding: 9px 12px; border-radius: var(--radius-sm); background: var(--sand); color: var(--muted); font-size: 0.86rem; }
+.gline .ic { width: 16px; height: 16px; flex: none; margin-top: 2px; color: var(--gold-deep); }
+.gline span { flex: 1 1 220px; }
+.gline--ko { background: var(--no-bg); color: var(--no); }
+.gline--ko .ic { color: var(--no); }
+.gline--ko strong { color: var(--no); }
 .gstatus strong { overflow-wrap: anywhere; }
 .more > *:not(summary) { margin-top: 14px; }
 

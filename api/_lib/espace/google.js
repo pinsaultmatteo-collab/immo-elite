@@ -182,7 +182,7 @@ async function gcal(method, path, { query = {}, body } = {}) {
   const j = await res.json().catch(() => ({}));
   if (!res.ok) {
     const gone = res.status === 404 || res.status === 410;
-    throw new GoogleError(gone ? "gone" : "api", gone ? "Événement introuvable dans Google Agenda." : `Google Agenda a répondu : ${j?.error?.message || res.status}.`);
+    throw new GoogleError(gone ? "gone" : "api", gone ? "Événement introuvable dans Google Agenda." : `Google Agenda a répondu : ${String(j?.error?.message || res.status).replace(/\.+$/, "")}.`);
   }
   return j;
 }
