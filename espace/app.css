@@ -229,7 +229,11 @@ p.card-pad { padding-bottom: 18px; }
 .todo-text { display: grid; gap: 1px; font-size: 0.95rem; }
 .todo-text em { font-style: normal; font-size: 0.8rem; color: var(--muted); }
 .todo-text em.late { color: var(--no); font-weight: 700; }
-.todo--done .todo-text { color: var(--muted); text-decoration: line-through; }
+.todo--done .todo-text { color: var(--muted); }
+.todo-label { display: block; }
+.todos--history { max-height: 420px; overflow-y: auto; padding-right: 4px; }
+.todo--done .todo-text em { text-decoration: none; display: block; }
+.todo--done .todo-label { text-decoration: line-through; }
 .todo-group { font-size: 0.72rem; letter-spacing: 0.14em; text-transform: uppercase; font-weight: 700; color: var(--muted); margin-top: 4px; }
 .todo-add { display: flex; flex-wrap: wrap; gap: 8px; }
 .todo-add .input { flex: 1 1 160px; min-height: 42px; padding: 8px 12px; font-size: 0.9rem; }
@@ -487,6 +491,17 @@ dialog { color: var(--ink); }
 .gbox legend { display: inline-flex; align-items: center; gap: 8px; padding: 0 6px; font-size: 0.84rem; font-weight: 700; }
 .gbox legend .ic { width: 17px; height: 17px; color: var(--gold-deep); }
 .gbox .link { justify-self: start; }
+.nego { display: grid; gap: 2px; padding: 12px 14px; border-radius: var(--radius-sm); background: var(--cream); }
+.nego-line { display: grid; grid-template-columns: 1fr auto; gap: 0 12px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 0.9rem; }
+.nego-line:last-child { border-bottom: 0; }
+.nego-line span { color: var(--muted); }
+.nego-line strong { text-align: right; font-variant-numeric: tabular-nums; }
+.nego-line em { grid-column: 1 / -1; justify-self: end; font-style: normal; font-size: 0.78rem; font-weight: 700; color: var(--muted); }
+.nego-line em.nego--down { color: var(--ok); }
+.nego-line em.nego--up { color: var(--no); }
+.nego-pct { font-family: var(--font-body); font-size: 0.72rem; font-weight: 700; color: var(--ok); }
+.suivi-form .form-submit { justify-content: flex-start; }
+.facts li strong { font-weight: 800; }
 .gstatus { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: var(--radius-sm); background: var(--ok-bg); color: var(--ok); font-size: 0.94rem; }
 .gstatus .ic { flex: none; margin-top: 1px; }
 .gline { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 6px 8px; padding: 9px 12px; border-radius: var(--radius-sm); background: var(--sand); color: var(--muted); font-size: 0.86rem; }

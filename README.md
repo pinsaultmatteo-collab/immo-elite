@@ -245,10 +245,10 @@ L'espace fonctionne aussi tout de suite sur `https://club.immoelite-formation.fr
 
 | Onglet | Contenu |
 | --- | --- |
-| **Accueil** | Jour X sur 90, les 4 phases (Diagnostic, Financement, Sourcing, Sécurisation), sessions faites sur 12, journées en présentiel sur 2, analyses de la semaine sur 5, prochaine session, actions à faire, son cap (capacité d'emprunt, stratégie…), dernières nouvelles |
+| **Accueil** | Jour X sur 90, les 4 phases (Diagnostic, Financement, Sourcing, Sécurisation), sessions faites sur 12, journées en présentiel sur 2, analyses de la semaine sur 5, prochaine session, actions à faire (date modifiable, historique daté des actions terminées, que le client ne peut pas effacer ; il ne peut ni modifier ni supprimer celles ajoutées par Mattéo), son cap (capacité d'emprunt, stratégie…), dernières nouvelles |
 | **Sessions** | Compteur des sessions restantes, compte rendu de chaque visio, lien du replay, document joint. Rappel de ce qui est inclus : signature du compromis en visio, débriefing à 6 mois, club 12 mois |
-| **Documents** | Coffre-fort à deux tiroirs : « De Mattéo » (comptes rendus, analyses de biens, diagnostic, modèles) et « Mes dépôts » (bulletins, avis d'imposition, devis…). Pastille « Nouveau » tant que le document n'a pas été ouvert |
-| **Logements** | Le client ajoute un logement visité depuis son téléphone : adresse, annonce, chiffres, impressions, photos, documents. Il voit aussitôt une estimation (rendement brut, net de charges, cash-flow). Mattéo publie son verdict (feu vert, à négocier, à écarter) avec un prix cible. Fil de messages par logement, suivi de l'offre |
+| **Documents** | Coffre-fort à deux tiroirs : « De Mattéo » (comptes rendus, analyses de biens, diagnostic, modèles) et « Mes dépôts ». Le client range ses pièces par catégorie (dossier bancaire, identité, patrimoine et crédits, logement, compromis, travaux, assurances, fiscalité) ou dans une catégorie libre ; nom et catégorie modifiables. Pastille « Nouveau » tant que le document n'a pas été ouvert |
+| **Logements** | Le client ajoute un logement visité depuis son téléphone : adresse, annonce, chiffres, impressions, photos, documents. Il voit aussitôt une estimation (rendement brut, net de charges, cash-flow). Mattéo publie son verdict (feu vert, à négocier, à écarter) avec un prix cible. Fil de messages par logement. Suivi et négociation : prix affiché (obligatoire), prix de l'offre, prix accepté, avec l'écart en € et en % ; Mattéo est prévenu par e-mail quand le client saisit une offre |
 | **Carnet** | Le carnet d'adresses de Mattéo : courtiers, notaire, artisans, comptable, conciergerie |
 
 ### Ce que voit Mattéo

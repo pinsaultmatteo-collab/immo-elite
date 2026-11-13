@@ -33,7 +33,21 @@ const PHASES = [
   { n: "02", nom: "Sourcing", sem: "Semaines 4 à 9", de: 4, desc: "Alertes paramétrées, chaque bien analysé sous 48 h, stratégie d'offre et négociation." },
   { n: "03", nom: "Sécurisation", sem: "Semaines 9 à 12", de: 9, desc: "Compromis relu, plan travaux, exploitation montée, cadrage fiscal." },
 ];
-const CATS = { "compte-rendu": "Compte rendu", analyse: "Analyse de bien", diagnostic: "Diagnostic et stratégie", bancaire: "Dossier bancaire", bien: "Logement visité", compromis: "Compromis et notaire", travaux: "Travaux et devis", outils: "Outils et modèles", contrat: "Contrat et facture", autre: "Autre" };
+const CATS = { "compte-rendu": "Compte rendu", analyse: "Analyse de bien", diagnostic: "Diagnostic et stratégie", bancaire: "Dossier bancaire", identite: "Identité et situation", patrimoine: "Patrimoine et crédits en cours", bien: "Logement visité", compromis: "Compromis et notaire", travaux: "Travaux et devis", assurance: "Assurances", fiscalite: "Fiscalité et comptabilité", outils: "Outils et modèles", contrat: "Contrat et facture", autre: "Autre" };
+const CLIENT_CATS = ["bancaire", "identite", "patrimoine", "bien", "compromis", "travaux", "assurance", "fiscalite", "autre"];
+const CAT_HINTS = {
+  bancaire: "Bulletins de salaire, avis d'imposition, relevés de compte, contrat de travail…",
+  identite: "Pièce d'identité, justificatif de domicile, livret de famille…",
+  patrimoine: "Tableaux d'amortissement, titres de propriété, épargne, baux en cours…",
+  bien: "Annonce, DPE, diagnostics, PV d'assemblée générale, plans…",
+  compromis: "Offre d'achat, compromis, échanges avec le notaire…",
+  travaux: "Devis d'artisans, factures, photos de travaux…",
+  assurance: "Assurance emprunteur, habitation, propriétaire non occupant…",
+  fiscalite: "Liasse fiscale, statuts de SCI, documents du comptable…",
+  autre: "Donne ta propre catégorie juste en dessous.",
+};
+/** Catégorie affichée : la catégorie libre si elle est renseignée. */
+const docCat = (d) => (d.categorie === "autre" && d.categorieLibre ? d.categorieLibre : CATS[d.categorie] || "Autre");
 const SESSION_TYPES = { individuelle: "Session individuelle", presentiel: "Journée en présentiel", signature: "Signature du compromis", debrief: "Débriefing à 6 mois" };
 const BIEN_TYPES = { appartement: "Appartement", maison: "Maison", immeuble: "Immeuble de rapport", local: "Local commercial", parking: "Parking ou garage", terrain: "Terrain", autre: "Autre" };
 const EXPLOITATIONS = { "": "À définir", nue: "Location nue", meublee: "Location meublée", colocation: "Colocation", "courte-duree": "Courte durée", mixte: "Mixte" };
@@ -423,12 +437,13 @@ function docRow(d, { compact } = {}) {
       h("span", { class: "doc-kind doc-kind--" + fileKind(d).toLowerCase() }, fileKind(d)),
       h("span", { class: "doc-text" },
         h("span", { class: "doc-name" }, d.nom, isNew && badge("Nouveau", "badge--gold")),
-        h("span", { class: "doc-meta" }, [CATS[d.categorie] || "Autre", fmtIso(d.ajouteLe), fmtSize(d.taille)].join(" · ")),
+        h("span", { class: "doc-meta" }, [docCat(d), fmtIso(d.ajouteLe), fmtSize(d.taille)].join(" · ")),
         d.note && h("span", { class: "doc-note" }, d.note),
       ),
     ),
     h("div", { class: "doc-actions" },
       h("a", { class: "icon-btn", href: fileUrl(d.id, true), title: "Télécharger", "aria-label": "Télécharger " + d.nom, onclick: seen }, icon("download")),
+      !compact && canEdit && h("button", { class: "icon-btn", type: "button", title: "Modifier", "aria-label": "Modifier " + d.nom, onclick: () => docDialog(d) }, icon("edit")),
       !compact && canEdit && h("button", { class: "icon-btn", type: "button", title: "Retirer", "aria-label": "Retirer " + d.nom, onclick: async () => { if (await confirmBox(`Retirer « ${d.nom} » du coffre-fort ? Le fichier sera supprimé définitivement.`, "Retirer")) act("doc.delete", { id: d.id }, { ok: "Document retiré." }); } }, icon("trash")),
     ),
   );
@@ -614,19 +629,49 @@ function nextSessionCard(c, s) {
   );
 }
 
+function actionDialog(c, a) {
+  const form = h("form", { class: "form", onsubmit: (e) => {
+    e.preventDefault();
+    busy(form, async () => {
+      const v = formValues(form);
+      const r = await act("action.save", { id: a.id, texte: v.texte, echeance: v.echeance, pour: v.pour || a.pour }, { ok: "Action mise à jour." });
+      if (r) dlg.close();
+    });
+  } },
+    field("Action", input("texte", a.texte, { maxlength: 240, required: true })),
+    h("div", { class: "form-row" },
+      field("Échéance", input("echeance", a.echeance, { type: "date" }), "Laisse vide pour ne pas fixer de date."),
+      isAdmin() && field("Pour qui", select("pour", a.pour, { client: c.prenom, matteo: "Moi" })),
+    ),
+    h("div", { class: "dlg-actions" }, submitButton("Enregistrer")),
+  );
+  const dlg = dialog({ title: "Modifier l'action", body: form });
+}
+
+const quiFait = (c, par) => (par === "matteo" ? "Mattéo" : par === "client" ? c.prenom : "");
+
 function actionsCard(c) {
   const open = c.actions.filter((a) => !a.fait);
-  const done = c.actions.filter((a) => a.fait);
+  const done = c.actions.filter((a) => a.fait).sort((x, y) => String(y.faitLe).localeCompare(String(x.faitLe)));
   const row = (a) => {
     const canToggle = isAdmin() || a.pour === "client";
-    const canRemove = isAdmin() || a.par === "client";
+    const mineAction = isAdmin() || a.par === "client";
+    const canEdit = mineAction && !a.fait;
+    const canRemove = isAdmin() || (a.par === "client" && !a.fait); // une action terminée reste dans l'historique
     const late = !a.fait && a.echeance && a.echeance < today();
+    const meta = a.fait
+      ? `Faite le ${fmtIso(a.faitLe)}${a.faitPar ? " par " + quiFait(c, a.faitPar) : ""} · ajoutée par ${quiFait(c, a.par)}`
+      : a.echeance ? (late ? "En retard · " : "Avant le ") + fmtDay(a.echeance) : "";
     return h("li", { class: "todo" + (a.fait ? " todo--done" : "") },
       h("label", { class: "todo-main" },
         h("input", { type: "checkbox", checked: a.fait, disabled: !canToggle, onchange: (e) => act("action.toggle", { id: a.id, fait: e.target.checked }) }),
-        h("span", { class: "todo-text" }, a.texte, a.echeance && !a.fait && h("em", { class: late ? "late" : "" }, (late ? "En retard · " : "Avant le ") + fmtDay(a.echeance))),
+        h("span", { class: "todo-text" }, h("span", { class: "todo-label" }, a.texte), meta && h("em", { class: late ? "late" : "" }, meta)),
       ),
-      canRemove && h("button", { class: "icon-btn icon-btn--sm", type: "button", "aria-label": "Supprimer l'action", onclick: () => act("action.delete", { id: a.id }) }, icon("x")),
+      canEdit && h("button", { class: "icon-btn icon-btn--sm", type: "button", "aria-label": "Modifier l'action", title: "Modifier", onclick: () => actionDialog(c, a) }, icon("edit")),
+      canRemove && h("button", { class: "icon-btn icon-btn--sm", type: "button", "aria-label": "Supprimer l'action", title: "Supprimer", onclick: async () => {
+        if (a.fait && !(await confirmBox("Supprimer cette action terminée de l'historique ?", "Supprimer"))) return;
+        act("action.delete", { id: a.id });
+      } }, icon("x")),
     );
   };
   const pourClient = open.filter((a) => a.pour === "client");
@@ -634,7 +679,7 @@ function actionsCard(c) {
   const add = h("form", { class: "todo-add", onsubmit: (e) => { e.preventDefault(); const v = formValues(e.target); if (v.texte.trim()) act("action.save", v); } },
     input("texte", "", { placeholder: T("Ajouter une action pour moi…", "Ajouter une action…"), maxlength: 240, "aria-label": "Nouvelle action" }),
     isAdmin() && select("pour", "client", { client: "Pour " + c.prenom, matteo: "Pour moi" }, { "aria-label": "Pour qui" }),
-    isAdmin() && input("echeance", "", { type: "date", "aria-label": "Échéance" }),
+    input("echeance", "", { type: "date", "aria-label": "Échéance" }),
     h("button", { class: "btn btn--dark btn--sm", type: "submit", "aria-label": "Ajouter" }, icon("plus")),
   );
   return card({},
@@ -643,7 +688,10 @@ function actionsCard(c) {
     pourClient.length > 0 && h("ul", { class: "todos" }, pourClient.map(row)),
     pourMatteo.length > 0 && [h("p", { class: "todo-group" }, T("Côté Mattéo", "Côté moi")), h("ul", { class: "todos" }, pourMatteo.map(row))],
     add,
-    done.length > 0 && h("details", { class: "todo-done" }, h("summary", {}, plural(done.length, "action terminée", "actions terminées")), h("ul", { class: "todos" }, done.slice(-12).reverse().map(row))),
+    done.length > 0 && h("details", { class: "todo-done" },
+      h("summary", {}, `Historique · ${plural(done.length, "action terminée", "actions terminées")}`),
+      h("ul", { class: "todos todos--history" }, done.map(row)),
+    ),
   );
 }
 
@@ -846,9 +894,50 @@ function viewSessions() {
 
 /* ---------- Documents ---------- */
 
+/** Choix de la catégorie, avec une aide par catégorie et un champ libre pour « Autre ». */
+function categoryFields(value, libre, keys) {
+  const hint = h("span", { class: "field-hint" }, CAT_HINTS[value] || "");
+  const libreField = field("Ta catégorie", input("categorieLibre", libre || "", { maxlength: 60, placeholder: "Ex. Documents de la SCI, succession…" }));
+  libreField.hidden = value !== "autre";
+  const sel = select("categorie", value, keys.map((k) => [k, k === "autre" ? "Autre (je précise)" : CATS[k]]), {
+    onchange: (e) => {
+      hint.textContent = CAT_HINTS[e.target.value] || "";
+      libreField.hidden = e.target.value !== "autre";
+      if (!libreField.hidden) libreField.querySelector("input").focus();
+    },
+  });
+  return [h("label", { class: "field" }, h("span", { class: "field-label" }, "Catégorie"), sel, hint), libreField];
+}
+
+function checkCategory(v) {
+  if (v.categorie === "autre" && !String(v.categorieLibre || "").trim()) throw new Error("Précise ta catégorie, ou choisis-en une dans la liste.");
+}
+
+function docDialog(doc) {
+  const keys = isAdmin() ? Object.keys(CATS) : [...new Set([...CLIENT_CATS, doc.categorie])];
+  const ext = (doc.nom.match(/\.[A-Za-z0-9]{1,5}$/) || [""])[0];
+  const form = h("form", { class: "form", onsubmit: (e) => {
+    e.preventDefault();
+    busy(form, async () => {
+      const v = formValues(form);
+      checkCategory(v);
+      let nom = v.nom.trim() || doc.nom;
+      if (ext && !nom.toLowerCase().endsWith(ext.toLowerCase())) nom += ext; // garde l'extension du fichier
+      const r = await act("doc.update", { id: doc.id, nom, categorie: v.categorie, categorieLibre: v.categorieLibre || "", note: v.note }, { ok: "Document mis à jour." });
+      if (r) dlg.close();
+    });
+  } },
+    field("Nom", input("nom", doc.nom, { maxlength: 140, required: true })),
+    categoryFields(doc.categorie, doc.categorieLibre, keys),
+    field("Note (facultatif)", input("note", doc.note, { maxlength: 600 })),
+    h("div", { class: "dlg-actions" }, submitButton("Enregistrer")),
+  );
+  const dlg = dialog({ title: "Modifier le document", body: form });
+}
+
 function uploadDialog({ bienId, title } = {}) {
   const c = state.client;
-  const cats = isAdmin() ? CATS : Object.fromEntries(Object.entries(CATS).filter(([k]) => !["compte-rendu", "analyse", "diagnostic", "outils"].includes(k)));
+  const keys = isAdmin() ? Object.keys(CATS) : CLIENT_CATS;
   const picker = filePicker({ name: "files", accept: DOC_ACCEPT, label: "Choisir des fichiers", hint: `PDF, photos, Word, Excel… ${state.maxFileMb} Mo maximum par fichier.` });
   const form = h("form", { class: "form", onsubmit: (e) => {
     e.preventDefault();
@@ -856,15 +945,16 @@ function uploadDialog({ bienId, title } = {}) {
       const v = formValues(form);
       const files = form.querySelector('input[type="file"]').files;
       if (!files.length) throw new Error("Choisis au moins un fichier.");
+      if (!bienId) checkCategory(v);
       say("Envoi…");
       const tickets = await uploadAll(files, (r) => say(`Envoi… ${Math.round(r * 100)} %`));
       say("Enregistrement…");
-      const res = await act("doc.add", { tickets, categorie: v.categorie, note: v.note, bienId, notify: v.notify === "on" }, { ok: files.length > 1 ? "Documents ajoutés." : "Document ajouté." });
+      const res = await act("doc.add", { tickets, categorie: v.categorie, categorieLibre: v.categorieLibre || "", note: v.note, bienId, notify: v.notify === "on" }, { ok: files.length > 1 ? "Documents ajoutés." : "Document ajouté." });
       if (res) { if (!bienId) state.docsTab = mine(); d.close(); render(); }
     });
   } },
     picker,
-    !bienId && field("Catégorie", select("categorie", isAdmin() ? "compte-rendu" : "bancaire", cats)),
+    !bienId && categoryFields(isAdmin() ? "compte-rendu" : "bancaire", "", keys),
     bienId && h("input", { type: "hidden", name: "categorie", value: isAdmin() ? "analyse" : "bien" }),
     field("Note (facultatif)", input("note", "", { maxlength: 600, placeholder: T("Ex. Relevés de septembre à novembre", "Ex. À lire avant notre prochaine session") })),
     isAdmin() && h("label", { class: "check" }, h("input", { type: "checkbox", name: "notify", checked: true }), h("span", {}, `Prévenir ${c.prenom} par e-mail`)),
@@ -877,16 +967,16 @@ function viewDocuments() {
   const c = state.client;
   const tab = state.docsTab || (isAdmin() ? "client" : "matteo");
   const all = c.documents.filter((d) => d.source === tab);
-  const cats = [...new Set(all.map((d) => d.categorie))];
+  const cats = [...new Set(all.map(docCat))];
   const cat = cats.includes(state.docsCat) ? state.docsCat : "";
-  const list = cat ? all.filter((d) => d.categorie === cat) : all;
+  const list = cat ? all.filter((d) => docCat(d) === cat) : all;
   const count = (src) => c.documents.filter((d) => d.source === src).length;
   const news = (src) => c.documents.filter((d) => d.source === src && d.source !== mine() && !d.luLe).length;
   const tabBtn = (src, label) => h("button", { class: "seg" + (tab === src ? " active" : ""), type: "button", "aria-pressed": String(tab === src), onclick: () => { state.docsTab = src; state.docsCat = ""; render(); } }, label, h("span", { class: "seg-n" }, count(src)), news(src) > 0 && h("b", { class: "count" }, news(src)));
   return [
     pageHead({ eyebrow: "Coffre-fort", title: T("Ton coffre-fort", "Coffre-fort"), lead: T("Les documents que Mattéo te remet, et ceux que tu lui confies.", "Tes documents pour le client, et ceux qu'il t'a confiés."), actions: h("button", { class: "btn btn--gold btn--sm", type: "button", onclick: () => uploadDialog() }, icon("upload"), T("Déposer un document", "Ajouter un document")) }),
     h("div", { class: "segs", role: "group", "aria-label": "Origine des documents" }, tabBtn("matteo", T("De Mattéo", "Mes documents")), tabBtn("client", T("Mes dépôts", "Ses dépôts"))),
-    cats.length > 1 && h("div", { class: "chips" }, h("button", { class: "chip" + (!cat ? " active" : ""), type: "button", onclick: () => { state.docsCat = ""; render(); } }, "Tout"), cats.map((k) => h("button", { class: "chip" + (cat === k ? " active" : ""), type: "button", onclick: () => { state.docsCat = k; render(); } }, CATS[k] || k))),
+    cats.length > 1 && h("div", { class: "chips" }, h("button", { class: "chip" + (!cat ? " active" : ""), type: "button", onclick: () => { state.docsCat = ""; render(); } }, "Tout"), cats.map((k) => h("button", { class: "chip" + (cat === k ? " active" : ""), type: "button", onclick: () => { state.docsCat = k; render(); } }, k))),
     card({ class: "card--flush" },
       list.length
         ? h("ul", { class: "docs" }, list.map((d) => docRow(d)))
@@ -920,10 +1010,62 @@ function bienCard(b) {
           h("span", {}, h("em", {}, "Prix affiché"), h("strong", {}, eur(b.prix))),
           h("span", {}, h("em", {}, "Rendement brut"), h("strong", {}, pct(k.brut))),
           b.verdict?.prixCible != null && h("span", {}, h("em", {}, "Prix cible"), h("strong", {}, eur(b.verdict.prixCible))),
+          b.prixOffre != null && h("span", {}, h("em", {}, "Offre"), h("strong", {}, eur(b.prixOffre), nego(b.prix, b.prixOffre) && h("small", { class: "nego-pct" }, " " + nego(b.prix, b.prixOffre).pct))),
+          b.prixAccepte != null && h("span", {}, h("em", {}, "Accepté"), h("strong", {}, eur(b.prixAccepte), nego(b.prix, b.prixAccepte) && h("small", { class: "nego-pct" }, " " + nego(b.prix, b.prixAccepte).pct))),
         ),
         h("p", { class: "bien-foot" }, b.dateVisite ? "Visité le " + fmtDay(b.dateVisite) : "Ajouté " + rel(b.createdAt)),
       ),
     ),
+  );
+}
+
+const OFFRES = ["offre", "offre-acceptee", "compromis", "acte", "abandonne"]; // suivis où une offre a été faite
+const ACCEPTES = ["offre-acceptee", "compromis", "acte"];
+
+/** Écart avec le prix affiché : « −14 000 € », « −9,4 % ». */
+function nego(prix, montant) {
+  if (prix == null || montant == null || !prix) return null;
+  const diff = montant - prix;
+  const sign = diff < 0 ? "−" : diff > 0 ? "+" : "";
+  return { diff, euros: sign + eur(Math.abs(diff)), pct: sign + (Math.abs(diff) / prix * 100).toLocaleString("fr-FR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + " %" };
+}
+
+function negoLine(label, prix, montant) {
+  const n = nego(prix, montant);
+  return h("div", { class: "nego-line" },
+    h("span", {}, label),
+    h("strong", {}, eur(montant)),
+    n && h("em", { class: n.diff < 0 ? "nego--down" : n.diff > 0 ? "nego--up" : "" }, n.diff === 0 ? "au prix affiché" : `${n.euros} · ${n.pct}`),
+  );
+}
+
+function suiviCard(b) {
+  const offreField = field("Prix de l'offre (€)", money("prixOffre", b.prixOffre, { placeholder: "Ex. 172 000" }), "Le montant proposé au vendeur.");
+  const accepteField = field("Prix accepté (€)", money("prixAccepte", b.prixAccepte, { placeholder: "Ex. 175 000" }), "Le prix final, après négociation.");
+  const show = (suivi) => { offreField.hidden = !OFFRES.includes(suivi); accepteField.hidden = !ACCEPTES.includes(suivi); };
+  show(b.suivi || "");
+  const form = h("form", { class: "form suivi-form", onsubmit: (e) => {
+    e.preventDefault();
+    busy(form, async () => {
+      const v = formValues(form);
+      await act("bien.suivi", { id: b.id, suivi: v.suivi, prixOffre: OFFRES.includes(v.suivi) ? v.prixOffre : null, prixAccepte: ACCEPTES.includes(v.suivi) ? v.prixAccepte : null }, { ok: "Suivi mis à jour." });
+    });
+  } },
+    field("Où en est ce logement ?", select("suivi", b.suivi, SUIVIS, { onchange: (e) => show(e.target.value) })),
+    offreField,
+    accepteField,
+    h("div", { class: "form-submit" }, submitButton("Enregistrer le suivi", "btn--dark btn--sm")),
+  );
+  const hasNego = b.prix != null && (b.prixOffre != null || b.prixAccepte != null);
+  return card({},
+    cardHead("Suivi et négociation"),
+    hasNego && h("div", { class: "nego" },
+      negoLine("Prix affiché", null, b.prix),
+      b.prixOffre != null && negoLine("Offre faite", b.prix, b.prixOffre),
+      b.prixAccepte != null && negoLine("Prix accepté", b.prix, b.prixAccepte),
+      b.verdict?.prixCible != null && negoLine("Prix cible de Mattéo", b.prix, b.verdict.prixCible),
+    ),
+    form,
   );
 }
 
@@ -1002,12 +1144,12 @@ function bienForm(existing) {
       h("div", { class: "form-row" }, field("Adresse", input("adresse", b.adresse, { maxlength: 160, autocomplete: "off" })), field("Code postal", input("codePostal", b.codePostal, { maxlength: 10, inputmode: "numeric" }))),
       h("div", { class: "form-row" }, field("Ville", input("ville", b.ville, { maxlength: 80 })), field("Date de la visite", input("dateVisite", b.dateVisite, { type: "date" }))),
       field("Lien de l'annonce", input("lien", b.lien, { inputmode: "url", autocapitalize: "off", placeholder: "https://…" })),
+      h("div", { class: "form-row" }, field("Prix affiché (€)", money("prix", b.prix, { required: true, placeholder: "Ex. 185 000" }), "Le prix de l'annonce, frais d'agence inclus."), field("Travaux estimés (€)", money("travaux", b.travaux))),
       h("div", { class: "form-row" }, field("Type de bien", select("type", b.type, BIEN_TYPES)), field("Exploitation envisagée", select("exploitation", b.exploitation, EXPLOITATIONS))),
       h("div", { class: "form-row form-row--3" }, field("Surface (m²)", money("surface", b.surface)), field("Pièces ou lots", money("pieces", b.pieces, { inputmode: "numeric" })), field("DPE", select("dpe", b.dpe || "", { "": "—", A: "A", B: "B", C: "C", D: "D", E: "E", F: "F", G: "G" }))),
     ),
     h("fieldset", {}, h("legend", {}, "Les chiffres"),
       h("p", { class: "fieldset-hint" }, "Des ordres de grandeur suffisent : tu pourras corriger ensuite."),
-      h("div", { class: "form-row" }, field("Prix affiché (€)", money("prix", b.prix)), field("Travaux estimés (€)", money("travaux", b.travaux))),
       h("div", { class: "form-row" }, field("Loyer mensuel estimé (€)", money("loyer", b.loyer), "Total de tous les lots, hors charges."), field("Frais de notaire (€)", money("fraisNotaire", b.fraisNotaire), "Laisse vide : estimés à 8 % du prix.")),
       h("div", { class: "form-row" }, field("Charges de copropriété par an (€)", money("charges", b.charges)), field("Taxe foncière par an (€)", money("taxeFonciere", b.taxeFonciere))),
       h("details", { class: "more", open: b.taux != null || b.apport != null }, h("summary", {}, "Financement envisagé (facultatif)"),
@@ -1095,7 +1237,7 @@ function viewBien() {
   const lien = safeUrl(b.lien);
   const a = b.verdict && AVIS[b.verdict.avis];
   const where = [b.adresse, [b.codePostal, b.ville].filter(Boolean).join(" ")].filter(Boolean).join(", ");
-  const facts = [BIEN_TYPES[b.type], b.surface != null && `${b.surface} m²`, b.pieces != null && plural(b.pieces, b.type === "immeuble" ? "lot" : "pièce", b.type === "immeuble" ? "lots" : "pièces"), b.dpe && "DPE " + b.dpe, b.exploitation && EXPLOITATIONS[b.exploitation], b.dateVisite && "Visité le " + fmtDay(b.dateVisite)].filter(Boolean);
+  const facts = [b.prix != null && h("strong", {}, "Affiché " + eur(b.prix)), BIEN_TYPES[b.type], b.surface != null && `${b.surface} m²`, b.pieces != null && plural(b.pieces, b.type === "immeuble" ? "lot" : "pièce", b.type === "immeuble" ? "lots" : "pièces"), b.dpe && "DPE " + b.dpe, b.exploitation && EXPLOITATIONS[b.exploitation], b.dateVisite && "Visité le " + fmtDay(b.dateVisite)].filter(Boolean);
 
   const verdict = b.verdict
     ? card({ class: "verdict verdict--" + a.cls },
@@ -1143,7 +1285,7 @@ function viewBien() {
           b.moins && h("div", { class: "note" }, h("p", { class: "note-k note-k--moins" }, "Ce qui inquiète"), pre(b.moins)),
           b.question && h("div", { class: "note" }, h("p", { class: "note-k" }, T("Ta question", "Sa question")), pre(b.question)),
         ),
-        card({}, cardHead("Suivi"), field("Où en est ce logement ?", select("suivi", b.suivi, SUIVIS, { onchange: (e) => act("bien.suivi", { id: b.id, suivi: e.target.value }, { ok: "Suivi mis à jour." }) }))),
+        suiviCard(b),
         card({ class: "card--flush" }, h("div", { class: "card-pad" }, cardHead("Documents liés", h("button", { class: "link", type: "button", onclick: () => uploadDialog({ bienId: b.id, title: "Ajouter un document à ce logement" }) }, "Ajouter"))), docs.length ? h("ul", { class: "docs" }, docs.map((d) => docRow(d))) : h("p", { class: "muted card-pad" }, "DPE, diagnostics, devis, analyse : ils apparaissent ici et dans le coffre-fort.")),
       ),
     ),

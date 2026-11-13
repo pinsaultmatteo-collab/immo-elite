@@ -39,12 +39,13 @@ const TYPES = {
 /* Seuls ces types s'ouvrent dans le navigateur ; tout le reste est proposé en téléchargement. */
 const INLINE = new Set(["application/pdf", "image/jpeg", "image/png", "image/webp", "image/gif"]);
 
-const CATEGORIES = ["compte-rendu", "analyse", "diagnostic", "bancaire", "bien", "compromis", "travaux", "outils", "contrat", "autre"];
+const CATEGORIES = ["compte-rendu", "analyse", "diagnostic", "bancaire", "identite", "patrimoine", "bien", "compromis", "travaux", "assurance", "fiscalite", "outils", "contrat", "autre"];
 const TYPES_SESSION = ["individuelle", "presentiel", "signature", "debrief"];
 const TYPES_BIEN = ["appartement", "maison", "immeuble", "local", "parking", "terrain", "autre"];
 const EXPLOITATIONS = ["", "nue", "meublee", "colocation", "courte-duree", "mixte"];
 const AVIS = ["feu-vert", "a-negocier", "a-ecarter"];
 const SUIVIS = ["", "offre", "offre-acceptee", "compromis", "acte", "abandonne"];
+const ACCEPTES = ["offre-acceptee", "compromis", "acte"]; // suivis où un prix final a été accepté
 const CATEGORIES_CARNET = ["courtier", "banque", "notaire", "artisan", "comptable", "conciergerie", "agent", "autre"];
 
 /* ------------------------------------------------------------------ */
@@ -411,7 +412,8 @@ const ACTIONS = {
       const cid = clientIdOf(who, body);
       const files = await claimUploads(cid, body.tickets);
       if (!files.length) fail(400, "Aucun fichier à ajouter.");
-      const fields = { categorie: oneOf(body.categorie, CATEGORIES, "autre"), note: text(body.note, 600) };
+      const categorie = oneOf(body.categorie, CATEGORIES, "autre");
+      const fields = { categorie, categorieLibre: categorie === "autre" ? line(body.categorieLibre, 60) : "", note: text(body.note, 600) };
       const { data } = await change(cid, (d) => {
         if (body.bienId && d.biens.some((b) => b.id === body.bienId)) fields.bienId = body.bienId;
         if (body.sessionId && d.sessions.some((s) => s.id === body.sessionId)) fields.sessionId = body.sessionId;
@@ -437,6 +439,7 @@ const ACTIONS = {
         if (who.role !== "admin" && doc.source !== "client") fail(403, "Ce document a été déposé par Mattéo.");
         if (body.nom != null) doc.nom = line(body.nom, 140) || doc.nom;
         if (body.categorie != null) doc.categorie = oneOf(body.categorie, CATEGORIES, doc.categorie);
+        if (body.categorieLibre != null || body.categorie != null) doc.categorieLibre = doc.categorie === "autre" ? line(body.categorieLibre, 60) : "";
         if (body.note != null) doc.note = text(body.note, 600);
       });
       return reply(who, data);
@@ -480,6 +483,7 @@ const ACTIONS = {
       const cid = clientIdOf(who, body);
       const fields = bienFields(body.bien);
       if (!fields.titre && !fields.adresse && !fields.ville) fail(400, "Donne au moins un nom, une adresse ou une ville à ce logement.");
+      if (fields.prix == null) fail(400, "Indique le prix affiché du logement (prix de l'annonce).");
       if (!fields.titre) fields.titre = [fields.adresse, fields.ville].filter(Boolean).join(", ");
       const [photos, pieces] = await Promise.all([claimUploads(cid, body.photoTickets, 20), claimUploads(cid, body.docTickets, 10)]);
       const removePhotos = new Set(Array.isArray(body.removePhotoIds) ? body.removePhotoIds.map(String) : []);
@@ -550,17 +554,43 @@ const ACTIONS = {
   },
 
   "bien.suivi": {
-    async run({ who, body }) {
+    async run({ request, who, body }) {
       const cid = clientIdOf(who, body);
+      const labels = { offre: "Offre faite", "offre-acceptee": "Offre acceptée", compromis: "Compromis signé", acte: "Acte signé", abandonne: "Piste abandonnée" };
+      let changed = false;
       const { data } = await change(cid, (d) => {
+        changed = false;
         const b = find(d.biens, body.id, "Logement");
         const suivi = oneOf(body.suivi, SUIVIS, b.suivi);
-        if (suivi !== b.suivi) {
-          b.suivi = suivi;
-          const labels = { offre: "Offre faite", "offre-acceptee": "Offre acceptée", compromis: "Compromis signé", acte: "Acte signé", abandonne: "Piste abandonnée" };
-          if (labels[suivi]) log(d, side(who), "suivi", `${labels[suivi]} : ${b.titre}`, b.id);
-        }
+        const keep = (field) => (body[field] !== undefined ? num(body[field], { dec: 0 }) : b[field] ?? null);
+        const prixOffre = suivi === "" ? null : keep("prixOffre");
+        const prixAccepte = ACCEPTES.includes(suivi) ? keep("prixAccepte") : null;
+        if (suivi === b.suivi && prixOffre === (b.prixOffre ?? null) && prixAccepte === (b.prixAccepte ?? null)) return;
+        changed = true;
+        const before = b.suivi;
+        Object.assign(b, { suivi, prixOffre, prixAccepte, suiviLe: nowIso() });
+        if (labels[suivi]) {
+          const montant = suivi === "offre" ? prixOffre : ACCEPTES.includes(suivi) ? prixAccepte ?? prixOffre : null;
+          log(d, side(who), "suivi", `${labels[suivi]}${montant != null ? ` à ${eur(montant)}` : ""} : ${b.titre}`, b.id);
+        } else if (before && !suivi) log(d, side(who), "suivi", `Suivi remis à zéro : ${b.titre}`, b.id);
       });
+      // Une offre (ou son issue) saisie par le client : Mattéo est prévenu.
+      const b = data.biens.find((x) => x.id === body.id);
+      if (changed && who.role !== "admin" && labels[b.suivi]) {
+        const ecart = (v) => {
+          if (v == null || !b.prix) return "";
+          const diff = v - b.prix, pct = ((Math.abs(diff) / b.prix) * 100).toFixed(1).replace(".", ",");
+          return diff === 0 ? " (au prix affiché)" : ` (${diff < 0 ? "−" : "+"}${eur(Math.abs(diff))}, soit ${pct} % ${diff < 0 ? "sous le" : "au-dessus du"} prix affiché)`;
+        };
+        await notify({
+          to: notifyAddress(), replyTo: who.email,
+          subject: `${fullName(data)} — ${labels[b.suivi]} : ${b.titre}`,
+          eyebrow: "Suivi d'un logement", title: `${labels[b.suivi]} — ${b.titre}`,
+          lines: [`${fullName(data)} a mis à jour le suivi de ce logement.`],
+          details: [["Prix affiché", b.prix != null ? eur(b.prix) : ""], ["Prix de l'offre", b.prixOffre != null ? eur(b.prixOffre) + ecart(b.prixOffre) : ""], ["Prix accepté", b.prixAccepte != null ? eur(b.prixAccepte) + ecart(b.prixAccepte) : ""]],
+          cta: { label: "Ouvrir le logement", url: `${espaceUrl(request)}#/c/${cid}/logements/${b.id}` },
+        });
+      }
       return reply(who, data);
     },
   },
@@ -637,11 +667,12 @@ const ACTIONS = {
         const pour = who.role === "admin" ? oneOf(body.pour, ["client", "matteo"], "client") : "client";
         if (body.id) {
           const a = find(d.actions, body.id, "Action");
-          if (who.role !== "admin" && a.par !== "client") fail(403, "Cette action a été ajoutée par Mattéo.");
-          Object.assign(a, { texte, pour, echeance: date(body.echeance) });
+          if (who.role !== "admin" && a.par !== "client") fail(403, "Cette action a été ajoutée par Mattéo : demande-lui de la modifier.");
+          Object.assign(a, { texte, pour: who.role === "admin" ? pour : a.pour, echeance: date(body.echeance), modifieLe: nowIso() });
         } else {
-          d.actions.push({ id: newId("a_"), texte, pour, echeance: date(body.echeance), fait: false, faitLe: null, par: side(who), createdAt: nowIso() });
-          if (d.actions.length > 300) d.actions = d.actions.slice(-300);
+          d.actions.push({ id: newId("a_"), texte, pour, echeance: date(body.echeance), fait: false, faitLe: null, faitPar: "", par: side(who), createdAt: nowIso() });
+          // Historique conservé : seules les plus anciennes au-delà de 1 000 actions sont retirées.
+          if (d.actions.length > 1000) d.actions = d.actions.slice(-1000);
         }
       });
       return reply(who, data);
@@ -656,6 +687,7 @@ const ACTIONS = {
         if (who.role !== "admin" && a.pour !== "client") fail(403, "Cette action est côté Mattéo.");
         a.fait = body.fait === true;
         a.faitLe = a.fait ? nowIso() : null;
+        a.faitPar = a.fait ? side(who) : "";
         if (a.fait && who.role !== "admin") log(d, "client", "action", `Action terminée : ${a.texte}`);
       });
       return reply(who, data);
@@ -668,6 +700,7 @@ const ACTIONS = {
       const { data } = await change(cid, (d) => {
         const a = find(d.actions, body.id, "Action");
         if (who.role !== "admin" && a.par !== "client") fail(403, "Cette action a été ajoutée par Mattéo.");
+        if (who.role !== "admin" && a.fait) fail(403, "Une action terminée reste dans l'historique.");
         d.actions = d.actions.filter((x) => x.id !== a.id);
       });
       return reply(who, data);
