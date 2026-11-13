@@ -1,6 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "regions": ["cdg1"],
+  "regions": [
+    "cdg1"
+  ],
   "cleanUrls": true,
   "trailingSlash": false,
   "headers": [
@@ -78,7 +80,7 @@
         },
         {
           "key": "Content-Security-Policy",
-          "value": "script-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+          "value": "script-src 'self' https://connect.facebook.net https://www.googletagmanager.com; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
         }
       ]
     },

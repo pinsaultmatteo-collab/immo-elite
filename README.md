@@ -294,7 +294,9 @@ e-mail ne part : le code s'affiche dans la page. Les données vont dans `.espace
 - Les fichiers sont dans un magasin Vercel Blob **privé** : aucun lien public. Chaque lecture passe par la
   fonction serveur, qui vérifie la connexion et que le fichier appartient bien à ce client.
 - Un client ne peut ni voir ni modifier l'espace d'un autre : le contrôle est fait côté serveur à chaque requête.
-- Aucun pixel ni outil de mesure d'audience n'est chargé sur `/espace`. La page n'est pas indexable.
+- Le Pixel Meta et GA4 sont chargés sur l'espace comme sur le reste du site (choix de Mattéo, 13 novembre 2026).
+  Sur le sous-domaine `espace.`, la capture automatique des clics du Pixel est coupée (`autoConfig` à `false`) :
+  le texte cliqué (nom d'un document, adresse ou prix d'un logement) ne part pas chez Meta. La page n'est pas indexable.
 - Archiver un client (fiche > Archiver) coupe son accès immédiatement, sans rien supprimer.
 - Fichiers acceptés : PDF, images, Word, Excel, PowerPoint, CSV, ZIP, vidéos MP4/MOV, 50 Mo maximum par
   fichier (`ESPACE_MAX_FILE_MB`). Les photos sont allégées dans le navigateur avant l'envoi.

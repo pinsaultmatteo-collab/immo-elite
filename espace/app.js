@@ -5,6 +5,7 @@
    ========================================================= */
 
 const API = "/api/espace";
+const PRIVACY_URL = "/confidentialite#espace-client";
 const NS = "http://www.w3.org/2000/svg";
 const $app = document.getElementById("app");
 
@@ -488,7 +489,7 @@ function viewLogin() {
         L.hint && h("p", { class: "notice" }, L.hint),
         L.error && h("p", { class: "notice notice--error", role: "alert" }, L.error),
         L.step === "email" ? emailForm : codeForm,
-        h("p", { class: "login-foot" }, icon("shield"), "Espace privé, réservé aux clients accompagnés. Tes documents ne sont visibles que par toi et Mattéo."),
+        h("p", { class: "login-foot" }, icon("shield"), h("span", {}, "Espace privé, réservé aux clients accompagnés. Tes documents ne sont visibles que par toi et Mattéo. ", h("a", { class: "link", href: PRIVACY_URL, target: "_blank", rel: "noopener" }, "Confidentialité"), " · ", h("a", { class: "link", href: "/mentions-legales", target: "_blank", rel: "noopener" }, "Mentions légales"))),
       ),
     ),
   );
@@ -534,6 +535,7 @@ function shell(content) {
       h("div", { class: "side-foot" },
         h("p", { class: "side-who" }, h("strong", {}, state.me.prenom || "Connecté"), h("span", {}, state.me.email)),
         h("button", { class: "side-logout", type: "button", onclick: logout }, icon("logout"), "Se déconnecter"),
+        h("a", { class: "side-legal", href: PRIVACY_URL, target: "_blank", rel: "noopener" }, "Confidentialité"),
       ),
     ),
     h("header", { class: "top" },
@@ -821,7 +823,7 @@ function viewDocuments() {
           ? empty("folder", T("Rien pour l'instant", "Aucun document déposé"), T("Les comptes rendus de vos sessions et les analyses de tes logements arriveront ici.", "Ajoute un compte rendu, une analyse ou un modèle : le client est prévenu par e-mail."))
           : empty("upload", T("Tu n'as encore rien déposé", "Le client n'a encore rien déposé"), T("Bulletins de salaire, avis d'imposition, devis, compromis : dépose ici ce que Mattéo doit voir.", "Ses pièces apparaîtront ici dès qu'il les dépose."), !isAdmin() && h("button", { class: "btn btn--dark btn--sm", type: "button", onclick: () => uploadDialog() }, icon("upload"), "Déposer un document")),
     ),
-    h("p", { class: "secure" }, icon("shield"), "Stockage privé : ces fichiers ne sont accessibles qu'après connexion, par toi et " + T("Mattéo", "ton client") + "."),
+    h("p", { class: "secure" }, icon("shield"), h("span", {}, "Stockage privé : ces fichiers ne sont accessibles qu'après connexion, par toi et " + T("Mattéo", "ton client") + ". ", h("a", { class: "link", href: PRIVACY_URL, target: "_blank", rel: "noopener" }, "Durée de conservation et tes droits"))),
   ];
 }
 

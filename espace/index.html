@@ -6,8 +6,9 @@
   <title>Espace client · IMMO Élite</title>
   <meta name="description" content="Espace privé des clients accompagnés par Mattéo Pinsault : sessions, coffre-fort de documents, logements visités.">
   <meta name="robots" content="noindex, nofollow">
-  <!-- Seuls les scripts de ce site peuvent s'exécuter ici : barrière contre l'injection de code. -->
-  <meta http-equiv="Content-Security-Policy" content="script-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'">
+  <!-- Seuls les scripts de ce site, du Pixel Meta et de Google Analytics peuvent s'exécuter ici :
+       barrière contre l'injection de code. -->
+  <meta http-equiv="Content-Security-Policy" content="script-src 'self' https://connect.facebook.net https://www.googletagmanager.com; object-src 'none'; base-uri 'none'; form-action 'self'">
   <meta name="theme-color" content="#1A1714">
   <link rel="icon" type="image/png" href="/assets/img/icon-128.png">
   <link rel="apple-touch-icon" href="/assets/img/icon-128.png">
@@ -15,10 +16,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Manrope:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/espace/app.css?v=20261113">
+  <link rel="stylesheet" href="/espace/app.css?v=2026111302">
 </head>
 <body>
-  <!-- Espace privé : aucun outil de mesure d'audience ni pixel publicitaire n'est chargé ici. -->
+  <!-- Pixel Meta et GA4 chargés comme sur le reste du site (choix de Mattéo, 13 novembre 2026). -->
   <div id="app">
     <div class="boot" role="status" aria-live="polite">
       <span class="boot-mark">IMMO <em>Élite</em></span>
@@ -28,6 +29,8 @@
   <noscript>
     <p style="max-width:32rem;margin:4rem auto;padding:0 1.25rem;font-family:sans-serif;">Ton espace client a besoin de JavaScript pour fonctionner. Active-le dans ton navigateur puis recharge la page.</p>
   </noscript>
-  <script type="module" src="/espace/app.js?v=20261113"></script>
+  <script src="/assets/js/config.js?v=2026110806"></script>
+  <script src="/assets/js/tracking.js?v=2026111301"></script>
+  <script type="module" src="/espace/app.js?v=2026111302"></script>
 </body>
 </html>

@@ -7,10 +7,16 @@
    ========================================================= */
 (function () {
   var cfg = window.IE_CONFIG || {};
+  /* Espace client (espace.immoelite-formation.fr) : Pixel et GA4 actifs comme partout
+     (choix de Mattéo, 13 novembre 2026). Seule la capture automatique des clics du Pixel
+     y est coupée, pour que le texte cliqué (nom d'un document, adresse ou prix d'un
+     logement) ne parte pas chez Meta. PageView et événements normaux inchangés. */
+  var isEspace = /^espace\./.test(window.location.hostname);
 
   /* --- Pixel Meta (snippet officiel) --- */
   if (cfg.pixelId) {
     !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
+    if (isEspace) window.fbq("set", "autoConfig", false, cfg.pixelId);
     window.fbq("init", cfg.pixelId);
     window.fbq("track", "PageView");
   }

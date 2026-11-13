@@ -541,6 +541,8 @@ dialog { color: var(--ink); }
   .side-logout { display: flex; align-items: center; gap: 8px; font-size: 0.86rem; font-weight: 600; color: var(--muted-dark); }
   .side-logout:hover { color: var(--cream); }
   .side-logout .ic { width: 17px; height: 17px; }
+  .side-legal { font-size: 0.76rem; color: var(--muted-dark); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: rgba(185, 176, 162, 0.4); }
+  .side-legal:hover { color: var(--cream); }
   .main { margin-left: var(--side); padding: 44px 44px 64px; }
   .page { gap: 22px; }
   .grid--2 { grid-template-columns: 1fr 1fr; }
