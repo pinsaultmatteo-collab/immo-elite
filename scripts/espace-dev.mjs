@@ -4,6 +4,7 @@
  *
  *   node scripts/espace-dev.mjs            → http://localhost:4174/espace
  *   node scripts/espace-dev.mjs --reset    → repart d'un client de démonstration tout neuf
+ *   node scripts/espace-dev.mjs --sans-google → sans la fausse connexion Google Agenda
  *
  * - Les données vont dans le dossier `.espace-data/` (jamais publié, jamais dans Git).
  * - Aucun e-mail n'est envoyé : le code de connexion s'affiche dans la page et dans ce terminal.
@@ -29,9 +30,76 @@ process.env.ESPACE_STORAGE = "local";
 process.env.ESPACE_LOCAL_DIR = DATA;
 process.env.ESPACE_ADMIN_EMAILS ||= "matteo@demo.test";
 
+/* ------------------------------------------------------------------ */
+/* Faux Google (Agenda + Meet) : aucun appel réel, tout reste en local */
+/* ------------------------------------------------------------------ */
+
+const FAKE_GOOGLE = !process.argv.includes("--sans-google");
+const fakeEvents = new Map();
+if (FAKE_GOOGLE) {
+  process.env.GOOGLE_CLIENT_ID = "client-demo";
+  process.env.GOOGLE_CLIENT_SECRET = "secret-demo";
+  process.env.ESPACE_GOOGLE_AUTH_URL = `http://localhost:${PORT}/__google/auth`;
+  const realFetch = globalThis.fetch;
+  const reply = (body, status = 200) => new Response(body == null ? null : JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+  const letters = (n) => Array.from({ length: n }, () => "abcdefghijkmnopqrstuvwxyz"[Math.floor(Math.random() * 25)]).join("");
+  globalThis.fetch = async (input, init = {}) => {
+    const url = new URL(input instanceof Request ? input.url : String(input));
+    if (url.host === "oauth2.googleapis.com") {
+      if (url.pathname === "/revoke") return new Response(null, { status: 200 });
+      const form = new URLSearchParams(String(init.body || ""));
+      if (form.get("grant_type") === "authorization_code") {
+        if (form.get("code") !== "code-demo") return reply({ error: "invalid_grant" }, 400);
+        const idToken = ["e30", Buffer.from(JSON.stringify({ email: "agenda.matteo@demo.test" })).toString("base64url"), "signature"].join(".");
+        return reply({ access_token: "acces-demo", expires_in: 3599, refresh_token: "rafraichissement-demo", scope: "openid https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/userinfo.email", id_token: idToken });
+      }
+      if (form.get("grant_type") === "refresh_token") return form.get("refresh_token") === "rafraichissement-demo" ? reply({ access_token: "acces-demo", expires_in: 3599 }) : reply({ error: "invalid_grant" }, 400);
+      return reply({ error: "unsupported_grant_type" }, 400);
+    }
+    if (url.host === "www.googleapis.com" && url.pathname.startsWith("/calendar/v3/calendars/")) {
+      if (new Headers(init.headers).get("authorization") !== "Bearer acces-demo") return reply({ error: { message: "Invalid Credentials" } }, 401);
+      const id = decodeURIComponent(url.pathname.match(/\/events\/([^/]+)$/)?.[1] || "");
+      const body = init.body ? JSON.parse(init.body) : {};
+      const notif = url.searchParams.get("sendUpdates");
+      const addMeet = (ev, cd) => {
+        if (!cd?.createRequest || url.searchParams.get("conferenceDataVersion") !== "1") return;
+        ev.hangoutLink = `https://meet.google.com/${letters(3)}-${letters(4)}-${letters(3)}`;
+        ev.conferenceData = { conferenceSolution: { key: { type: "hangoutsMeet" } }, entryPoints: [{ entryPointType: "video", uri: ev.hangoutLink }] };
+      };
+      const show = (verb, ev) => console.log(`[faux Google] ${verb} : ${ev.summary} · ${ev.start?.dateTime} → ${ev.end?.dateTime} · invités : ${(ev.attendees || []).map((a) => a.email).join(", ") || "aucun"} · e-mails Google : ${notif} · Meet : ${ev.hangoutLink || "non"}`);
+      const method = (init.method || "GET").toUpperCase();
+      if (method === "POST") {
+        const { conferenceData, ...rest } = body;
+        const ev = { id: "ev" + letters(10), status: "confirmed", ...rest };
+        ev.htmlLink = `https://calendar.google.com/calendar/event?eid=${ev.id}`;
+        addMeet(ev, conferenceData);
+        fakeEvents.set(ev.id, ev);
+        show("événement créé", ev);
+        return reply(ev);
+      }
+      const ev = fakeEvents.get(id);
+      if (!ev) return reply({ error: { message: "Not Found" } }, 404);
+      if (method === "GET") return reply(ev);
+      if (method === "PATCH") {
+        const { conferenceData, ...rest } = body;
+        Object.assign(ev, rest);
+        addMeet(ev, conferenceData);
+        show("événement modifié", ev);
+        return reply(ev);
+      }
+      if (method === "DELETE") {
+        fakeEvents.delete(id);
+        console.log(`[faux Google] événement supprimé : ${ev.summary} · e-mails Google : ${notif}`);
+        return new Response(null, { status: 204 });
+      }
+    }
+    return realFetch(input, init);
+  };
+}
+
 if (process.argv.includes("--reset")) await fsp.rm(DATA, { recursive: true, force: true });
 
-const { handlePost, handleGet, handlePut } = await import("../api/_lib/espace/handler.js");
+const { handlePost, handleGet, handlePut, handleGoogleGet } = await import("../api/_lib/espace/handler.js");
 
 /* ------------------------------------------------------------------ */
 /* Client de démonstration                                             */
@@ -176,10 +244,21 @@ http
   .createServer(async (req, res) => {
     const u = new URL(req.url, `http://${req.headers.host}`);
     try {
-      if (u.pathname === "/api/espace") {
+      if (u.pathname === "/__google/auth" && FAKE_GOOGLE) {
+        // Fausse page d'autorisation Google : deux boutons, « Autoriser » et « Refuser ».
+        const back = new URL(u.searchParams.get("redirect_uri") || "/", `http://${req.headers.host}`);
+        const ok = new URL(back), ko = new URL(back);
+        ok.searchParams.set("code", "code-demo"); ok.searchParams.set("state", u.searchParams.get("state") || "");
+        ko.searchParams.set("error", "access_denied"); ko.searchParams.set("state", u.searchParams.get("state") || "");
+        const esc = (v) => String(v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+        res.end(`<!doctype html><meta charset="utf-8"><title>Faux Google</title><body style="font-family:sans-serif;max-width:30rem;margin:4rem auto;padding:0 1rem"><h1>Faux Google (démonstration)</h1><p>IMMO Élite demande à voir et modifier les événements de ton agenda.</p><p><a id="autoriser" href="${esc(ok)}">Autoriser</a> · <a id="refuser" href="${esc(ko)}">Refuser</a></p></body>`);
+        return;
+      }
+      if (u.pathname === "/api/espace" || u.pathname === "/api/espace-google") {
         const hasBody = req.method !== "GET" && req.method !== "HEAD";
         const request = new Request(u, { method: req.method, headers: req.headers, body: hasBody ? Readable.toWeb(req) : undefined, duplex: hasBody ? "half" : undefined });
-        const handler = { POST: handlePost, GET: handleGet, PUT: handlePut }[req.method];
+        const handler = u.pathname === "/api/espace-google" ? (req.method === "GET" ? handleGoogleGet : null) : { POST: handlePost, GET: handleGet, PUT: handlePut }[req.method];
         const response = handler ? await handler(request) : new Response("Méthode non autorisée", { status: 405 });
         const headers = {};
         response.headers.forEach((v, k) => { headers[k] = v; });
@@ -198,5 +277,6 @@ http
   })
   .listen(PORT, "127.0.0.1", () => {
     console.log(`\nEspace client (démonstration) : http://localhost:${PORT}/espace`);
+    if (FAKE_GOOGLE) console.log("  Google Agenda : faux Google local (Réglages > Connecter Google Agenda)");
     console.log("  Mattéo  → matteo@demo.test\n  Client  → client@demo.test\n  Le code de connexion s'affiche dans la page.\n");
   });

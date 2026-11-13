@@ -30,6 +30,9 @@ function secret() {
   fail(500, "L'espace client n'est pas encore configuré (ESPACE_SECRET manquant).");
 }
 
+/** Clé dérivée de ESPACE_SECRET pour un usage précis (ex. chiffrer le jeton Google). */
+export const deriveKey = (label) => crypto.createHash("sha256").update(label + ":" + secret()).digest();
+
 export const admins = () => (process.env.ESPACE_ADMIN_EMAILS || "").split(/[,;\s]+/).map((s) => s.trim().toLowerCase()).filter(Boolean);
 export const isAdmin = (email) => admins().includes(email);
 

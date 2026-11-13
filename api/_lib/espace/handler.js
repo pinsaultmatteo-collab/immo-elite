@@ -16,6 +16,7 @@ import { json, HttpError, fail, line, text, email as cleanEmail, num, date, time
 import { storage, mutate, readDoc, ConflictError, maxFileBytes, isLocal } from "./store.js";
 import * as auth from "./auth.js";
 import { notify, send, espaceUrl, notifyAddress } from "./mail.js";
+import * as google from "./google.js";
 
 const INDEX = "espace/index.json";
 const COMMUN = "espace/commun.json";
@@ -88,7 +89,7 @@ function viewFor(who, data) {
   const d = structuredClone(data);
   if (who.role !== "admin") {
     delete d.notesPrivees;
-    for (const s of d.sessions) delete s.notesPrivees;
+    for (const s of d.sessions) for (const k of ["notesPrivees", "googleEventId", "googleHtmlLink", "googleSync", "googleInvite"]) delete s[k];
   }
   for (const doc of d.documents) delete doc.path;
   for (const b of d.biens) for (const p of b.photos) delete p.path;
@@ -185,9 +186,56 @@ function sessionFields(s = {}) {
     resume: text(s.resume, 6000),
     replay: url(s.replay),
     lien: url(s.lien),
+    duree: num(s.duree, { min: 15, max: 720, dec: 0 }) ?? 60,
     notesPrivees: text(s.notesPrivees, 4000),
   };
 }
+
+/* ---------- Google Agenda ---------- */
+
+const SESSION_LABELS = { individuelle: "Session individuelle", presentiel: "Journée en présentiel", signature: "Signature du compromis", debrief: "Débriefing" };
+
+function eventFields(request, d, s, attendees) {
+  return {
+    summary: `IMMO Élite · ${s.titre || SESSION_LABELS[s.type] || "Session"} · ${`${d.prenom} ${d.nom}`.trim()}`.slice(0, 250),
+    description: [
+      "Accompagnement personnalisé IMMO Élite avec Mattéo Pinsault.",
+      s.titre ? `${SESSION_LABELS[s.type]} : ${s.titre}` : SESSION_LABELS[s.type],
+      "",
+      `Ton espace client (comptes rendus, documents, logements) : ${espaceUrl(request)}#/sessions`,
+    ].join("\n"),
+    date: s.date,
+    heure: s.heure,
+    duree: s.duree || 60,
+    attendees,
+  };
+}
+
+/**
+ * Crée ou met à jour l'événement Google Agenda d'une session, puis enregistre son lien.
+ * Ne fait rien si rien n'a changé depuis la dernière synchronisation (pas d'e-mail de mise à jour inutile).
+ * Appelée hors de `change()` : un appel à Google ne doit jamais être rejoué.
+ */
+async function syncSessionEvent(request, d, s, g) {
+  const attendees = g.invite ? d.emails : [];
+  const ev = eventFields(request, d, s, attendees);
+  const key = JSON.stringify([ev.summary, ev.date, ev.heure, ev.duree, attendees, g.meet]);
+  const hasMeet = /^https:\/\/meet\.google\.com\//.test(s.lien || "");
+  if (s.googleEventId && s.googleSync === key && (!g.meet || hasMeet)) return null;
+  const res = await google.upsertEvent({ existingId: s.googleEventId || "", meet: g.meet, invite: g.invite, ...ev });
+  const { data } = await change(d.id, (dd) => {
+    const x = dd.sessions.find((y) => y.id === s.id);
+    if (!x) return;
+    Object.assign(x, { googleEventId: res.id, googleHtmlLink: res.htmlLink, googleSync: key, googleInvite: attendees.length > 0 });
+    if (res.meet) x.lien = res.meet;
+  });
+  return data;
+}
+
+const googleWarning = (prefix, e) => {
+  if (!(e instanceof google.GoogleError)) console.error("[espace] Google Agenda :", e?.stack || e);
+  return `${prefix} ${e instanceof google.GoogleError ? e.message : "Erreur inattendue avec Google Agenda."}`;
+};
 
 function clientFields(c = {}) {
   const emails = [...new Set((Array.isArray(c.emails) ? c.emails : String(c.emails || "").split(/[,;\s]+/)).map(cleanEmail).filter(Boolean))].slice(0, 4);
@@ -323,7 +371,8 @@ const ACTIONS = {
     async run({ who, body }) {
       const cid = clientIdOf(who, body);
       const [data, commun] = await Promise.all([loadClient(cid), readDoc(COMMUN)]);
-      return reply(who, data, { commun: commun || COMMUN_VIDE, maxFileMb: Math.round(maxFileBytes() / 1048576) });
+      const extra = who.role === "admin" ? { google: await google.googleStatus() } : {};
+      return reply(who, data, { commun: commun || COMMUN_VIDE, maxFileMb: Math.round(maxFileBytes() / 1048576), ...extra });
     },
   },
 
@@ -629,6 +678,9 @@ const ACTIONS = {
       const cid = clientIdOf(who, body);
       const fields = sessionFields(body.session);
       if (!fields.date) fail(400, "Indique la date de la session.");
+      const gb = body.google && typeof body.google === "object" ? body.google : {};
+      const g = { sync: gb.sync === true, meet: gb.meet === true, invite: gb.invite === true };
+      if (g.sync && !fields.heure) fail(400, "Indique l'heure de la session pour l'ajouter à Google Agenda.");
       const files = await claimUploads(cid, body.tickets, 5);
       const id = body.id ? String(body.id) : newId("s_");
       let becameDone = false;
@@ -645,18 +697,28 @@ const ACTIONS = {
         addDocs(d, files.map((f) => asDoc(f, who, { categorie: "compte-rendu", sessionId: id })));
         if (becameDone) log(d, "matteo", "session", `Session du ${fields.date.split("-").reverse().join("/")} : compte rendu en ligne`, id);
       });
+      let out = data, warning = "";
+      if (g.sync) {
+        try {
+          out = (await syncSessionEvent(request, data, data.sessions.find((x) => x.id === id), g)) || data;
+        } catch (e) {
+          warning = googleWarning("La session est enregistrée, mais Google Agenda n'a pas suivi :", e);
+        }
+      }
       if (body.notify === true) {
         const done = fields.statut === "faite";
+        const s = out.sessions.find((x) => x.id === id);
         await notify({
-          to: data.emails.join(", "),
+          to: out.emails.join(", "),
           subject: done ? "Le compte rendu de notre session est en ligne" : "Notre prochaine session est planifiée",
           eyebrow: done ? "Compte rendu" : "Prochaine session",
           title: fields.titre || (done ? "Compte rendu de session" : "Session planifiée"),
-          lines: [`Salut ${data.prenom},`, done ? "Le compte rendu de notre session est dans ton espace, avec les actions à mener d'ici la prochaine." : `Notre session est planifiée le ${fields.date.split("-").reverse().join("/")}${fields.heure ? " à " + fields.heure.replace(":", " h ") : ""}.`],
+          lines: [`Salut ${out.prenom},`, done ? "Le compte rendu de notre session est dans ton espace, avec les actions à mener d'ici la prochaine." : `Notre session est planifiée le ${fields.date.split("-").reverse().join("/")}${fields.heure ? " à " + fields.heure.replace(":", " h ") : ""}.`],
+          details: !done && s?.lien ? [["Lien de la visio", s.lien]] : [],
           cta: { label: "Ouvrir mes sessions", url: `${espaceUrl(request)}#/sessions` },
         });
       }
-      return reply(who, data, { id });
+      return reply(who, out, { id, ...(warning ? { warning } : {}) });
     },
   },
 
@@ -664,12 +726,21 @@ const ACTIONS = {
     admin: true,
     async run({ who, body }) {
       const cid = clientIdOf(who, body);
+      let removed = null;
       const { data } = await change(cid, (d) => {
-        find(d.sessions, body.id, "Session");
+        removed = find(d.sessions, body.id, "Session");
         d.sessions = d.sessions.filter((x) => x.id !== body.id);
         for (const doc of d.documents) if (doc.sessionId === body.id) doc.sessionId = "";
       });
-      return reply(who, data);
+      let warning = "";
+      if (removed?.googleEventId && body.googleDelete !== false) {
+        try {
+          await google.deleteEvent(removed.googleEventId, { notify: Boolean(removed.googleInvite) });
+        } catch (e) {
+          warning = googleWarning("Session supprimée, mais l'événement est resté dans Google Agenda :", e);
+        }
+      }
+      return reply(who, data, warning ? { warning } : {});
     },
   },
 
@@ -678,7 +749,7 @@ const ACTIONS = {
   "admin.clients": {
     admin: true,
     async run() {
-      const [index, commun] = await Promise.all([readDoc(INDEX), readDoc(COMMUN)]);
+      const [index, commun, gstatus] = await Promise.all([readDoc(INDEX), readDoc(COMMUN), google.googleStatus()]);
       const all = (await Promise.all((index?.clients || []).map((c) => readDoc(clientPath(c.id))))).filter(Boolean);
       const actifs = all.filter((d) => !d.archived);
       return {
@@ -687,6 +758,7 @@ const ACTIONS = {
         aTraiter: actifs.flatMap(inbox).sort((a, b) => String(a.t).localeCompare(String(b.t))),
         commun: commun || COMMUN_VIDE,
         stockage: storage().name,
+        google: gstatus,
       };
     },
   },
@@ -799,6 +871,14 @@ const ACTIONS = {
     },
   },
 
+  "google.disconnect": {
+    admin: true,
+    async run() {
+      await google.disconnect();
+      return { ok: true, google: await google.googleStatus() };
+    },
+  },
+
   /** Vérifie en un clic que le stockage et l'e-mail fonctionnent en production. */
   "admin.diagnostic": {
     admin: true,
@@ -831,6 +911,10 @@ const ACTIONS = {
       }
       await run("Nettoyage", async () => { await st.remove([p, fp]); });
       await run("E-mail de test", async () => { const sent = await send({ to: who.email, subject: "Espace client IMMO Élite : e-mail de test", eyebrow: "Diagnostic", title: "L'envoi d'e-mails fonctionne", lines: ["Ce message confirme que l'espace client peut envoyer les codes de connexion et les notifications."] }); if (!sent) throw new Error("SMTP_USER / SMTP_PASS manquants."); return `Envoyé à ${who.email}`; });
+      const gs = await google.googleStatus().catch(() => ({ configured: false }));
+      if (!gs.configured) steps.push({ label: "Google Agenda", ok: true, detail: "Non configuré (facultatif)" });
+      else if (!gs.connected) steps.push({ label: "Google Agenda", ok: !gs.error, detail: gs.error ? "Connexion expirée : reconnecte Google Agenda ci-dessous" : "Configuré, pas encore connecté" });
+      else await run("Google Agenda", async () => { await google.checkConnection(); return `Connecté (${gs.email || "compte Google"})`; });
       return { ok: true, steps, allOk: steps.every((s) => s.ok) };
     },
   },
@@ -922,5 +1006,43 @@ export async function handlePut(request) {
     return json({ ok: true });
   } catch (e) {
     return errorResponse(e);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Connexion Google (GET /api/espace-google)                           */
+/* ------------------------------------------------------------------ */
+
+const GOOGLE_COOKIE = "ie_google_state";
+const googleCookie = (request, value, maxAge) => `${GOOGLE_COOKIE}=${value}; Path=/api/espace-google; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${reqUrl(request).protocol === "https:" ? "; Secure" : ""}`;
+
+/**
+ * ?start=1 : Mattéo (connecté en coach) part vers Google pour autoriser l'accès à son agenda.
+ * Retour de Google (?code=…&state=…) : on vérifie que c'est bien lui, puis on enregistre le jeton.
+ * Dans tous les cas, retour sur Réglages avec ?google=<résultat>.
+ */
+export async function handleGoogleGet(request) {
+  const u = reqUrl(request), q = u.searchParams;
+  const origin = google.googleOrigin(request);
+  const back = (flag) => new Response(null, { status: 302, headers: { Location: `${origin}/espace?google=${flag}#/reglages`, "Set-Cookie": googleCookie(request, "", 0), "Cache-Control": "no-store" } });
+  try {
+    if (!google.googleConfigured()) return back("non-configure");
+    if (q.has("start")) {
+      if (u.origin !== origin) return back("domaine");
+      const who = await identify(request);
+      if (!who || who.role !== "admin") return back("connexion");
+      const { url: target, nonce } = google.authorizeUrl(request, who.email);
+      return new Response(null, { status: 302, headers: { Location: target, "Set-Cookie": googleCookie(request, nonce, 600), "Cache-Control": "no-store" } });
+    }
+    if (q.get("error")) return back("refus");
+    const st = google.readState(q.get("state"));
+    const nonce = (request.headers.get("cookie") || "").match(new RegExp("(?:^|;\\s*)" + GOOGLE_COOKIE + "=([^;]+)"))?.[1];
+    const who = await identify(request);
+    if (!st || !nonce || nonce !== st.n || !who || who.role !== "admin" || who.email !== st.e) return back("connexion");
+    await google.connect(request, String(q.get("code") || ""));
+    return back("ok");
+  } catch (e) {
+    console.error("[espace] Connexion Google :", e?.message || e);
+    return back(e instanceof google.GoogleError && e.code === "scope" ? "scope" : "erreur");
   }
 }

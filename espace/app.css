@@ -482,6 +482,13 @@ dialog { color: var(--ink); }
 .diag-list .ok .ic { color: var(--ok); }
 .diag-list .ko .ic { color: var(--no); }
 .more { border-top: 1px solid var(--line); padding-top: 12px; }
+.gbox { display: grid; gap: 10px; padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--white); }
+.gbox legend { display: inline-flex; align-items: center; gap: 8px; padding: 0 6px; font-size: 0.84rem; font-weight: 700; }
+.gbox legend .ic { width: 17px; height: 17px; color: var(--gold-deep); }
+.gbox .link { justify-self: start; }
+.gstatus { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: var(--radius-sm); background: var(--ok-bg); color: var(--ok); font-size: 0.94rem; }
+.gstatus .ic { flex: none; margin-top: 1px; }
+.gstatus strong { overflow-wrap: anywhere; }
 .more > *:not(summary) { margin-top: 14px; }
 
 /* ---------- Téléphone : chiffres clés compacts ---------- */

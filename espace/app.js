@@ -15,6 +15,7 @@ const state = {
   commun: { reglages: {}, carnet: [] },
   admin: null, // { clients, aTraiter } pour l'accueil de Mattéo
   maxFileMb: 50,
+  google: { configured: false, connected: false }, // connexion Google Agenda (vue coach)
   loadedAt: 0,
   error: "",
   login: { step: "email", email: "", error: "", hint: "", busy: false },
@@ -114,7 +115,9 @@ const fmtDay = (s, o = { day: "numeric", month: "long" }) => (s ? parseDay(s).to
 const fmtDayLong = (s) => fmtDay(s, { weekday: "long", day: "numeric", month: "long" });
 const fmtDate = (d) => d.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
 const fmtIso = (iso) => (iso ? new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) : "");
-const fmtHeure = (hh) => (hh ? hh.replace(":", " h ").replace(" h 00", " h") : "");
+const fmtHeure = (hh) => (hh ? hh.replace(/^0(\d)/, "$1").replace(":", " h ").replace(" h 00", " h") : "");
+const plusMinutes = (hh, min) => { const [h0, m0] = hh.split(":").map(Number); const t = (h0 * 60 + m0 + min) % 1440; return `${pad(Math.floor(t / 60))}:${pad(t % 60)}`; };
+const horaire = (s) => (!s.heure ? "" : s.duree ? ` de ${fmtHeure(s.heure)} à ${fmtHeure(plusMinutes(s.heure, s.duree))}` : ` à ${fmtHeure(s.heure)}`);
 const fmtSize = (b) => (b >= 1048576 ? (b / 1048576).toFixed(1).replace(".", ",") + " Mo" : Math.max(1, Math.round(b / 1024)) + " Ko");
 const plural = (n, one, many) => `${n} ${n > 1 ? many : one}`;
 const safeUrl = (u) => (/^https?:\/\//i.test(u || "") ? u : "");
@@ -176,7 +179,9 @@ async function act(action, payload = {}, { ok, quiet } = {}) {
     const res = await api(action, withClient(payload));
     if (res.client) { state.client = res.client; state.loadedAt = Date.now(); }
     if (res.commun) state.commun = res.commun;
-    if (ok) toast(ok);
+    if (res.google) state.google = res.google;
+    if (res.warning) toast(res.warning, "error");
+    else if (ok) toast(ok);
     if (!quiet) render();
     return res;
   } catch (e) {
@@ -195,6 +200,7 @@ async function loadSpace() {
   state.client = res.client;
   state.commun = res.commun;
   state.maxFileMb = res.maxFileMb || 50;
+  if (res.google) state.google = res.google;
   state.loadedAt = Date.now();
 }
 
@@ -202,6 +208,7 @@ async function loadAdmin() {
   const res = await api("admin.clients");
   state.admin = res;
   state.commun = res.commun;
+  if (res.google) state.google = res.google;
 }
 
 /* ---------- Envoi de fichiers ---------- */
@@ -587,10 +594,10 @@ function nextSessionCard(c, s) {
       ? h("div", { class: "next" },
           h("div", { class: "next-date" }, h("span", {}, parseDay(n.date).toLocaleDateString("fr-FR", { month: "short" }).replace(".", "")), h("strong", {}, String(parseDay(n.date).getDate()))),
           h("div", { class: "next-body" },
-            h("p", { class: "next-when" }, fmtDayLong(n.date) + (n.heure ? " à " + fmtHeure(n.heure) : "")),
+            h("p", { class: "next-when" }, fmtDayLong(n.date) + horaire(n)),
             h("p", { class: "next-title" }, n.titre || SESSION_TYPES[n.type]),
             h("p", { class: "muted" }, SESSION_TYPES[n.type]),
-            visio && h("a", { class: "btn btn--dark btn--sm", href: visio, target: "_blank", rel: "noopener" }, icon("play"), "Rejoindre la visio"),
+            visio && h("a", { class: "btn btn--dark btn--sm", href: visio, target: "_blank", rel: "noopener" }, icon("play"), isMeet(visio) ? "Rejoindre sur Google Meet" : "Rejoindre la visio"),
           ),
         )
       : empty("calendar", "Aucune session planifiée", T("Mattéo ajoute ici la date de votre prochain rendez-vous.", "Ajoute la prochaine date depuis l'onglet Sessions."), agenda && !isAdmin() && h("a", { class: "btn btn--ghost btn--sm", href: agenda, target: "_blank", rel: "noopener" }, "Réserver un créneau")),
@@ -684,33 +691,68 @@ function viewAccueil() {
 
 /* ---------- Sessions ---------- */
 
+const DUREES = [["30", "30 min"], ["45", "45 min"], ["60", "1 h"], ["90", "1 h 30"], ["120", "2 h"], ["240", "Demi-journée (4 h)"], ["480", "Journée (8 h)"]];
+const isMeet = (u) => /^https:\/\/meet\.google\.com\//.test(u || "");
+
 function sessionDialog(s) {
-  const c = state.client;
-  const cur = s || { type: "individuelle", date: today(), heure: "", statut: "planifiee", titre: "", resume: "", replay: "", lien: "", notesPrivees: "" };
+  const c = state.client, G = state.google || {};
+  const cur = s || { type: "individuelle", date: today(), heure: "", duree: 60, statut: "planifiee", titre: "", resume: "", replay: "", lien: "", notesPrivees: "" };
+  const linked = Boolean(s?.googleEventId);
+  const duree = String(cur.duree || (cur.type === "presentiel" ? 480 : 60));
+  const durees = DUREES.some(([v]) => v === duree) ? DUREES : [...DUREES, [duree, `${duree} min`]];
   const picker = filePicker({ name: "files", accept: DOC_ACCEPT, label: "Joindre le compte rendu", hint: "PDF, Word… Il sera aussi rangé dans le coffre-fort." });
+
+  const gBox = G.connected
+    ? h("fieldset", { class: "gbox" },
+        h("legend", {}, icon("calendar"), "Google Agenda"),
+        h("label", { class: "check" }, h("input", { type: "checkbox", name: "gSync", checked: linked || !s }), h("span", {}, linked ? "Mettre à jour l'événement de mon Google Agenda" : "Ajouter à mon Google Agenda")),
+        h("label", { class: "check" }, h("input", { type: "checkbox", name: "gMeet", checked: s ? (linked ? isMeet(s.lien) : s.type !== "presentiel") : true }), h("span", {}, "Avec un lien Google Meet")),
+        h("label", { class: "check" }, h("input", { type: "checkbox", name: "gInvite", checked: s && linked ? Boolean(s.googleInvite) : true }), h("span", {}, `Inviter ${c.prenom} : Google lui envoie l'invitation à ${c.emails[0]}`)),
+        linked && safeUrl(s.googleHtmlLink) && h("a", { class: "link", href: safeUrl(s.googleHtmlLink), target: "_blank", rel: "noopener" }, "Voir l'événement dans Google Agenda"),
+      )
+    : G.configured
+      ? h("p", { class: "field-hint" }, G.error ? "La connexion à Google Agenda a expiré : reconnecte-la dans Réglages pour créer les liens Meet." : "Connecte Google Agenda dans Réglages : l'événement et son lien Meet se créeront tout seuls.")
+      : null;
+
   const form = h("form", { class: "form", onsubmit: (e) => {
     e.preventDefault();
     busy(form, async (say) => {
       const v = formValues(form);
+      const google = G.connected ? { sync: v.gSync === "on", meet: v.gMeet === "on", invite: v.gInvite === "on" } : undefined;
+      if (google?.sync && !v.heure) throw new Error("Indique l'heure de la session pour l'ajouter à Google Agenda.");
+      for (const k of ["gSync", "gMeet", "gInvite"]) delete v[k];
       const files = form.querySelector('input[type="file"]').files;
       if (files.length) say("Envoi du fichier…");
       const tickets = await uploadAll(files, (r) => say(`Envoi… ${Math.round(r * 100)} %`));
-      say("Enregistrement…");
-      const res = await act("session.save", { id: s?.id, session: v, tickets, notify: v.notify === "on" }, { ok: "Session enregistrée." });
+      say(google?.sync ? "Google Agenda…" : "Enregistrement…");
+      const res = await act("session.save", { id: s?.id, session: v, tickets, notify: v.notify === "on", google }, { ok: google?.sync ? "Session enregistrée et ajoutée à ton Google Agenda." : "Session enregistrée." });
       if (res) d.close();
     });
   } },
-    h("div", { class: "form-row" }, field("Type", select("type", cur.type, SESSION_TYPES)), field("Statut", select("statut", cur.statut, { planifiee: "Planifiée", faite: "Faite" }))),
-    h("div", { class: "form-row" }, field("Date", input("date", cur.date, { type: "date", required: true })), field("Heure", input("heure", cur.heure, { type: "time" }))),
+    h("div", { class: "form-row" },
+      field("Type", select("type", cur.type, SESSION_TYPES, { onchange: (e) => {
+        const meet = form.querySelector('input[name="gMeet"]');
+        if (meet && !linked) meet.checked = e.target.value !== "presentiel";
+        if (!s) form.querySelector('select[name="duree"]').value = e.target.value === "presentiel" ? "480" : "60";
+      } })),
+      field("Statut", select("statut", cur.statut, { planifiee: "Planifiée", faite: "Faite" })),
+    ),
+    h("div", { class: "form-row form-row--3" }, field("Date", input("date", cur.date, { type: "date", required: true })), field("Heure", input("heure", cur.heure, { type: "time" })), field("Durée", select("duree", duree, durees))),
+    gBox,
     field("Titre", input("titre", cur.titre, { maxlength: 120, placeholder: "Ex. Montage du dossier bancaire" })),
     field("Compte rendu", area("resume", cur.resume, { rows: 7, placeholder: "Ce qu'on a vu, ce qu'on a décidé. Visible par le client." })),
     field("Lien du replay", input("replay", cur.replay, { inputmode: "url", autocapitalize: "off", placeholder: "https://…" }), "Les sessions sont enregistrées : colle ici le lien de la vidéo."),
-    field("Lien de visio pour cette session", input("lien", cur.lien, { inputmode: "url", autocapitalize: "off", placeholder: "Laisse vide pour utiliser le lien habituel" })),
+    field("Lien de visio pour cette session", input("lien", cur.lien, { inputmode: "url", autocapitalize: "off", placeholder: G.connected ? "Rempli tout seul avec le lien Meet" : "Laisse vide pour utiliser le lien habituel" })),
     picker,
     field("Notes privées", area("notesPrivees", cur.notesPrivees, { rows: 3, placeholder: "Visibles uniquement par toi." })),
-    h("label", { class: "check" }, h("input", { type: "checkbox", name: "notify" }), h("span", {}, `Prévenir ${c.prenom} par e-mail`)),
+    h("label", { class: "check" }, h("input", { type: "checkbox", name: "notify" }), h("span", {}, `Prévenir aussi ${c.prenom} par e-mail depuis l'espace`)),
     h("div", { class: "dlg-actions" },
-      s && h("button", { class: "btn btn--ghost btn--danger-text", type: "button", onclick: async () => { if (await confirmBox("Supprimer cette session ? Ses documents restent dans le coffre-fort.", "Supprimer")) { const r = await act("session.delete", { id: s.id }, { ok: "Session supprimée." }); if (r) d.close(); } } }, "Supprimer"),
+      s && h("button", { class: "btn btn--ghost btn--danger-text", type: "button", onclick: async () => {
+        const msg = linked
+          ? `Supprimer cette session ? L'événement sera aussi retiré de ton Google Agenda${s.googleInvite ? ` et ${c.prenom} recevra l'annulation` : ""}. Ses documents restent dans le coffre-fort.`
+          : "Supprimer cette session ? Ses documents restent dans le coffre-fort.";
+        if (await confirmBox(msg, "Supprimer")) { const r = await act("session.delete", { id: s.id }, { ok: "Session supprimée." }); if (r) d.close(); }
+      } }, "Supprimer"),
       submitButton("Enregistrer"),
     ),
   );
@@ -722,6 +764,7 @@ function sessionCard(c, s, numero) {
   const replay = safeUrl(s.replay);
   const done = s.statut === "faite";
   const visio = !done && s.type !== "presentiel" ? safeUrl(s.lien) || safeUrl(state.commun.reglages?.visio) : "";
+  const gcal = isAdmin() && !done ? safeUrl(s.googleHtmlLink) : "";
   return h("li", { class: "session" + (done ? " session--done" : "") },
     h("div", { class: "session-mark" }, done ? icon("check") : icon("clock")),
     h("div", { class: "session-body" },
@@ -729,14 +772,15 @@ function sessionCard(c, s, numero) {
         h("div", {},
           h("p", { class: "session-kicker" }, s.type === "individuelle" ? `Session ${numero} sur ${c.offre.sessionsTotal}` : SESSION_TYPES[s.type]),
           h("h3", {}, s.titre || SESSION_TYPES[s.type]),
-          h("p", { class: "muted" }, fmtDayLong(s.date) + (s.heure ? " à " + fmtHeure(s.heure) : "")),
+          h("p", { class: "muted" }, fmtDayLong(s.date) + horaire(s)),
         ),
         isAdmin() && h("button", { class: "icon-btn", type: "button", "aria-label": "Modifier la session", onclick: () => sessionDialog(s) }, icon("edit")),
       ),
       s.resume && pre(s.resume, "session-resume"),
-      (replay || visio || docs.length > 0) && h("div", { class: "session-links" },
-        visio && h("a", { class: "btn btn--dark btn--sm", href: visio, target: "_blank", rel: "noopener" }, icon("play"), "Rejoindre la visio"),
+      (replay || visio || gcal) && h("div", { class: "session-links" },
+        visio && h("a", { class: "btn btn--dark btn--sm", href: visio, target: "_blank", rel: "noopener" }, icon("play"), isMeet(visio) ? "Rejoindre sur Google Meet" : "Rejoindre la visio"),
         replay && h("a", { class: "btn btn--ghost btn--sm", href: replay, target: "_blank", rel: "noopener" }, icon("play"), "Revoir la session"),
+        gcal && h("a", { class: "btn btn--ghost btn--sm", href: gcal, target: "_blank", rel: "noopener" }, icon("calendar"), "Google Agenda"),
       ),
       docs.length > 0 && h("ul", { class: "docs docs--inline" }, docs.map((d) => docRow(d, { compact: true }))),
       isAdmin() && s.notesPrivees && h("p", { class: "private" }, h("strong", {}, "Note privée · "), s.notesPrivees),
@@ -1210,6 +1254,30 @@ function viewAdmin() {
   ];
 }
 
+function googleCard() {
+  const G = state.google || {};
+  let body;
+  if (!G.configured) {
+    body = [h("p", { class: "muted" }, "Pour créer tes sessions directement dans Google Agenda avec un lien Google Meet, ajoute GOOGLE_CLIENT_ID et GOOGLE_CLIENT_SECRET dans Vercel (README, section 7), puis redéploie.")];
+  } else if (G.connected) {
+    body = [
+      h("p", { class: "gstatus" }, icon("check"), h("span", {}, "Connecté", G.email ? [" au compte ", h("strong", {}, G.email)] : "", G.connectedAt ? ` depuis le ${fmtIso(G.connectedAt).replace(/\.$/, "")}` : "", ".")),
+      h("p", { class: "muted" }, "En planifiant une session avec une heure, l'événement se crée dans ton agenda avec son lien Meet, et ton client reçoit l'invitation de Google. Le lien Meet apparaît aussi dans son espace."),
+      h("p", {}, h("button", { class: "btn btn--ghost btn--sm", type: "button", onclick: async () => {
+        if (await confirmBox("Déconnecter Google Agenda ? Les événements déjà créés restent dans ton agenda.", "Déconnecter")) await act("google.disconnect", {}, { ok: "Google Agenda déconnecté." });
+      } }, "Déconnecter")),
+    ];
+  } else {
+    body = [
+      G.error && h("p", { class: "notice notice--error" }, "La connexion à Google Agenda a expiré. Reconnecte-la pour continuer à créer les liens Meet."),
+      h("p", { class: "muted" }, "Relie ton agenda Google : en planifiant une session, l'événement et son lien Meet se créent tout seuls, et ton client reçoit l'invitation."),
+      h("p", {}, h("a", { class: "btn btn--gold btn--sm", href: "/api/espace-google?start=1" }, icon("calendar"), "Connecter Google Agenda")),
+      h("p", { class: "field-hint" }, "Google peut afficher « Google n'a pas validé cette application » : c'est la tienne. Clique sur « Paramètres avancés », puis sur « Accéder à IMMO Élite »."),
+    ];
+  }
+  return card({}, cardHead("Google Agenda et Meet"), body);
+}
+
 function viewReglages() {
   const r = state.commun.reglages || {};
   const form = h("form", { class: "form", onsubmit: (e) => { e.preventDefault(); busy(form, async () => { await act("admin.reglages.save", { reglages: formValues(form) }, { ok: "Réglages enregistrés." }); }); } },
@@ -1222,6 +1290,7 @@ function viewReglages() {
   return [
     pageHead({ eyebrow: "Espace coach", title: "Réglages", lead: "Communs à tous tes clients accompagnés." }),
     card({}, form),
+    googleCard(),
     card({}, cardHead("Installation"), h("p", { class: "muted" }, "Contrôle en un clic que le stockage privé, l'envoi de fichiers et les e-mails fonctionnent. Un e-mail de test t'est envoyé."), h("p", {}, h("button", { class: "btn btn--dark btn--sm", type: "button", onclick: diagnosticDialog }, icon("shield"), "Vérifier l'installation"))),
   ];
 }
@@ -1293,7 +1362,20 @@ document.addEventListener("visibilitychange", async () => {
   } catch (_) { /* on réessaiera à la prochaine navigation */ }
 });
 
+const GOOGLE_FLAGS = {
+  ok: ["Google Agenda est connecté.", "ok"],
+  refus: ["Connexion à Google annulée.", "error"],
+  scope: ["Google n'a pas donné l'accès à l'agenda : recommence en cochant l'accès à Google Agenda.", "error"],
+  connexion: ["Connecte-toi d'abord à ton espace coach, puis relance la connexion à Google.", "error"],
+  domaine: ["Relance la connexion à Google depuis cette adresse.", "error"],
+  "non-configure": ["Google Agenda n'est pas encore configuré (GOOGLE_CLIENT_ID et GOOGLE_CLIENT_SECRET).", "error"],
+  erreur: ["La connexion à Google a échoué. Réessaie dans un instant.", "error"],
+};
+
 (async function boot() {
+  const flag = new URLSearchParams(location.search).get("google");
+  if (flag) history.replaceState(null, "", location.pathname + location.hash);
   try { state.me = await whoAmI(); } catch (_) { state.me = null; }
   await onRoute();
+  if (flag && GOOGLE_FLAGS[flag]) toast(...GOOGLE_FLAGS[flag]);
 })();

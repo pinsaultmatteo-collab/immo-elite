@@ -19,7 +19,8 @@ Construit à partir du « Brief Claude Code — Page de vente Club IMMO ÉLITE �
 | `api/create-checkout-session.js` | Crée la session Stripe Checkout (abonnement 97 €/mois) |
 | `api/stripe-webhook.js` | Attache l'engagement de 12 mois (calendrier d'abonnement), idempotent |
 | `espace/` + `api/espace.js` + `api/_lib/espace/` | **Espace client de l'accompagnement individuel** (sessions, coffre-fort, logements visités). Voir la section 7 |
-| `scripts/espace-dev.mjs` | Démonstration locale de l'espace client, avec un client fictif |
+| `scripts/espace-dev.mjs` | Démonstration locale de l'espace client, avec un client fictif et un faux Google Agenda |
+| `api/espace-google.js` + `api/_lib/espace/google.js` | Connexion à Google Agenda et création des liens Google Meet (facultatif) |
 | `vercel.json`, `package.json`, `.env.example` | Déploiement |
 
 ## 1. Ce que Mattéo doit fournir (ouvrir `assets/js/config.js`)
@@ -287,6 +288,35 @@ e-mail ne part : le code s'affiche dans la page. Les données vont dans `.espace
 4. **Redéployer** (un push sur `main` suffit), puis ouvrir `/espace`, se connecter, aller dans
    Réglages > **Vérifier l'installation** : le contrôle écrit, relit, envoie un fichier et un e-mail de test.
 5. **Créer le client** (Nouveau client), puis **Inviter** : il reçoit un e-mail avec le lien.
+
+### Google Agenda et Google Meet (facultatif)
+
+Une fois Google relié, planifier une session dans la vue coach crée l'événement dans l'agenda de Mattéo,
+avec un lien Google Meet, et peut inviter le client (Google lui envoie l'invitation, puis les changements
+et l'annulation). Le lien Meet s'affiche aussi dans l'espace du client (« Rejoindre sur Google Meet »).
+Changer la date, l'heure, la durée ou le titre met l'événement à jour ; supprimer la session le retire.
+Sans changement d'horaire, rien n'est renvoyé à Google (pas d'e-mail de mise à jour inutile).
+
+Mise en place, une seule fois (console Google Cloud, avec le compte Google de l'agenda) :
+
+1. https://console.cloud.google.com : créer un projet, par exemple « IMMO Élite espace ».
+2. **API et services > Bibliothèque** : activer **Google Calendar API**.
+3. **Google Auth Platform** (ou « Écran de consentement OAuth ») :
+   - type d'utilisateurs **Externe**, nom de l'application « IMMO Élite », adresse d'assistance ;
+   - domaine autorisé : `immoelite-formation.fr` ;
+   - accès aux données : ajouter `.../auth/calendar.events` (avec `openid` et `email`) ;
+   - audience : **Publier l'application** (statut « En production »). En statut « Test », Google coupe
+     la connexion au bout de 7 jours. La validation par Google n'est pas nécessaire pour un usage
+     personnel : à la connexion, Google affiche « application non validée », il suffit de cliquer sur
+     « Paramètres avancés », puis « Accéder à IMMO Élite ».
+4. **Clients** (ou « Identifiants ») > Créer un ID client OAuth > **Application Web** > URI de redirection
+   autorisé : `https://espace.immoelite-formation.fr/api/espace-google`.
+5. Vercel > Environment Variables (Production) : `GOOGLE_CLIENT_ID` et `GOOGLE_CLIENT_SECRET`, puis redéployer.
+6. Espace coach > **Réglages > Connecter Google Agenda**, en étant sur `espace.immoelite-formation.fr`.
+
+Le jeton Google est chiffré (clé dérivée de `ESPACE_SECRET`) dans le stockage privé. Changer `ESPACE_SECRET`
+oblige à reconnecter Google. « Déconnecter » révoque l'accès chez Google. Le diagnostic contrôle aussi la
+connexion. En démonstration locale (`npm run espace`), un faux Google remplace le vrai : rien ne sort.
 
 ### Sécurité et confidentialité
 
