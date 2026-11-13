@@ -18,6 +18,8 @@ Construit à partir du « Brief Claude Code — Page de vente Club IMMO ÉLITE �
 | `assets/js/main.js` | Animations, accordéons, barre fixe, appel à la fonction de paiement |
 | `api/create-checkout-session.js` | Crée la session Stripe Checkout (abonnement 97 €/mois) |
 | `api/stripe-webhook.js` | Attache l'engagement de 12 mois (calendrier d'abonnement), idempotent |
+| `espace/` + `api/espace.js` + `api/_lib/espace/` | **Espace client de l'accompagnement individuel** (sessions, coffre-fort, logements visités). Voir la section 7 |
+| `scripts/espace-dev.mjs` | Démonstration locale de l'espace client, avec un client fictif |
 | `vercel.json`, `package.json`, `.env.example` | Déploiement |
 
 ## 1. Ce que Mattéo doit fournir (ouvrir `assets/js/config.js`)
@@ -231,6 +233,80 @@ Dans GA4, marquer `purchase` et `generate_lead` comme événements clés (Admini
 7. Société qui vend l'abonnement (mentions légales, CGV, factures).
 8. Médiateur de la consommation à inscrire dans les CGV.
 9. Délai de validation de l'accès Skool affiché : « sous 24 h ouvrées » (page de vente, page merci, e-mail, CGV).
+
+## 7. Espace client de l'accompagnement individuel
+
+Un espace privé pour chaque client de l'accompagnement à 10 000 € (90 jours). Adresse : `/espace`, donc
+`https://espace.immoelite-formation.fr` une fois le sous-domaine branché (il redirige vers `/espace`).
+L'espace fonctionne aussi tout de suite sur `https://club.immoelite-formation.fr/espace`.
+
+### Ce que voit le client
+
+| Onglet | Contenu |
+| --- | --- |
+| **Accueil** | Jour X sur 90, les 4 phases (Diagnostic, Financement, Sourcing, Sécurisation), sessions faites sur 12, journées en présentiel sur 2, analyses de la semaine sur 5, prochaine session, actions à faire, son cap (capacité d'emprunt, stratégie…), dernières nouvelles |
+| **Sessions** | Compteur des sessions restantes, compte rendu de chaque visio, lien du replay, document joint. Rappel de ce qui est inclus : signature du compromis en visio, débriefing à 6 mois, club 12 mois |
+| **Documents** | Coffre-fort à deux tiroirs : « De Mattéo » (comptes rendus, analyses de biens, diagnostic, modèles) et « Mes dépôts » (bulletins, avis d'imposition, devis…). Pastille « Nouveau » tant que le document n'a pas été ouvert |
+| **Logements** | Le client ajoute un logement visité depuis son téléphone : adresse, annonce, chiffres, impressions, photos, documents. Il voit aussitôt une estimation (rendement brut, net de charges, cash-flow). Mattéo publie son verdict (feu vert, à négocier, à écarter) avec un prix cible. Fil de messages par logement, suivi de l'offre |
+| **Carnet** | Le carnet d'adresses de Mattéo : courtiers, notaire, artisans, comptable, conciergerie |
+
+### Ce que voit Mattéo
+
+Connecté avec une adresse listée dans `ESPACE_ADMIN_EMAILS`, il arrive sur la liste de ses clients, avec une
+boîte « À traiter » (logements à analyser, documents déposés, messages). En entrant dans un espace, il voit
+la même chose que le client, avec en plus les boutons pour ajouter une session, déposer un document, rédiger
+un verdict, ajouter une action, tenir des notes privées (jamais visibles du client). Réglages communs :
+numéro WhatsApp, lien de visio, lien de prise de rendez-vous.
+
+E-mails envoyés automatiquement (même boîte que le club, `contact@`) : code de connexion, nouveau logement à
+analyser (à Mattéo), verdict publié, nouveau document, message sur un logement, invitation à l'espace.
+
+### Essayer en local, sans rien mettre en ligne
+
+```bash
+npm run espace            # http://localhost:4174/espace
+npm run espace -- --reset # repart d'un client de démonstration tout neuf
+```
+
+Connexions de démonstration : `matteo@demo.test` (vue coach) et `client@demo.test` (vue client). Aucun
+e-mail ne part : le code s'affiche dans la page. Les données vont dans `.espace-data/` (jamais publié).
+
+### Mise en ligne (une seule fois)
+
+1. **Stockage privé.** Vercel > projet immo-elite > Storage > Create > Blob > accès **Private** > le relier
+   au projet (tous les environnements). Rien à copier : Vercel fournit l'accès à la fonction.
+2. **Deux variables.** Vercel > Settings > Environment Variables (Production) :
+   - `ESPACE_SECRET` : une longue clé aléatoire, à générer avec
+     `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"`
+   - `ESPACE_ADMIN_EMAILS` : l'adresse e-mail avec laquelle Mattéo se connecte.
+   `SMTP_USER` et `SMTP_PASS` sont déjà en place pour le club : l'espace les réutilise.
+3. **Sous-domaine.** Vercel > Settings > Domains > ajouter `espace.immoelite-formation.fr`. Puis chez OVH,
+   zone DNS : une entrée `CNAME` `espace` vers la cible indiquée par Vercel (comme pour `club`).
+4. **Redéployer** (un push sur `main` suffit), puis ouvrir `/espace`, se connecter, aller dans
+   Réglages > **Vérifier l'installation** : le contrôle écrit, relit, envoie un fichier et un e-mail de test.
+5. **Créer le client** (Nouveau client), puis **Inviter** : il reçoit un e-mail avec le lien.
+
+### Sécurité et confidentialité
+
+- Connexion sans mot de passe : code à 6 chiffres par e-mail, valable 10 minutes, 5 essais, session de 30 jours.
+- Les fichiers sont dans un magasin Vercel Blob **privé** : aucun lien public. Chaque lecture passe par la
+  fonction serveur, qui vérifie la connexion et que le fichier appartient bien à ce client.
+- Un client ne peut ni voir ni modifier l'espace d'un autre : le contrôle est fait côté serveur à chaque requête.
+- Aucun pixel ni outil de mesure d'audience n'est chargé sur `/espace`. La page n'est pas indexable.
+- Archiver un client (fiche > Archiver) coupe son accès immédiatement, sans rien supprimer.
+- Fichiers acceptés : PDF, images, Word, Excel, PowerPoint, CSV, ZIP, vidéos MP4/MOV, 50 Mo maximum par
+  fichier (`ESPACE_MAX_FILE_MB`). Les photos sont allégées dans le navigateur avant l'envoi.
+
+### Limites connues
+
+- Le stockage privé Vercel Blob n'a pas pu être testé avant la mise en ligne (il faut un magasin réel) :
+  tout a été vérifié en local avec un dossier à la place. Le bouton « Vérifier l'installation » sert à
+  confirmer le fonctionnement en production dès l'étape 4.
+- Plan Vercel Hobby : 1 Go de stockage et 2 000 écritures par mois inclus. Largement suffisant pour
+  quelques clients ; au-delà, passer au plan Pro.
+- L'estimation de rentabilité est volontairement simple (frais de notaire estimés à 8 % si non saisis,
+  avant impôts, hors assurance de prêt). Le verdict de Mattéo fait foi.
+- Pas de suppression définitive d'un espace depuis l'interface (archivage seulement).
 
 ## Règles respectées
 
