@@ -273,8 +273,10 @@ e-mail ne part : le code s'affiche dans la page. Les données vont dans `.espace
 
 ### Mise en ligne (une seule fois)
 
-1. **Stockage privé.** Vercel > projet immo-elite > Storage > Create > Blob > accès **Private** > le relier
-   au projet (tous les environnements). Rien à copier : Vercel fournit l'accès à la fonction.
+1. **Stockage privé.** Vercel > projet immo-elite > Storage > Create > Blob > accès **Private**, région
+   **Paris (cdg1)** > le relier au projet (tous les environnements). Rien à copier : Vercel fournit l'accès
+   à la fonction. Les fonctions du site tournent aussi à Paris (`"regions": ["cdg1"]` dans `vercel.json`) :
+   garder le stockage dans la même région évite un aller-retour transatlantique à chaque lecture.
 2. **Deux variables.** Vercel > Settings > Environment Variables (Production) :
    - `ESPACE_SECRET` : une longue clé aléatoire, à générer avec
      `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"`
