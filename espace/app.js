@@ -430,6 +430,141 @@ const empty = (ic, title, textContent, action) => h("div", { class: "empty" }, h
 const badge = (label, cls = "") => h("span", { class: "badge " + cls }, label);
 const pre = (textContent, cls = "") => h("p", { class: "pre " + cls }, textContent);
 
+/* ---------- Texte collé mis en forme (compte rendu Wispr Flow, notes, analyses) ----------
+   Titres, puces, sous-puces, **gras**. Tout est construit en éléments : aucun HTML du texte n'est interprété. */
+
+const BULLET = /^(\s*)[*•\-–]\s+(.*)$/;
+
+function inlineText(str) {
+  const out = [], re = /\*\*([^*]+)\*\*/g;
+  let last = 0, m;
+  while ((m = re.exec(str))) {
+    if (m.index > last) out.push(str.slice(last, m.index));
+    out.push(h("strong", {}, m[1]));
+    last = re.lastIndex;
+  }
+  if (last < str.length) out.push(str.slice(last));
+  return out;
+}
+
+/** « (Mathias) Appeler l'agence » : le nom entre parenthèses devient une étiquette. */
+function bulletContent(str) {
+  const m = str.match(/^\(([^)]{1,40})\)\s*(.*)$/);
+  return m ? [h("span", { class: "rt-who" }, m[1]), " ", inlineText(m[2])] : inlineText(str);
+}
+
+function richText(text, cls = "") {
+  const root = h("div", { class: ("rt " + cls).trim() });
+  const lines = String(text || "").replace(/\r\n?/g, "\n").split("\n");
+  let stack = [], para = [];
+  const flush = () => { if (para.length) { root.append(h("p", {}, inlineText(para.join(" ")))); para = []; } };
+  lines.forEach((raw, i) => {
+    if (!raw.trim()) { flush(); stack = []; return; }
+    const b = raw.match(BULLET);
+    if (b) {
+      flush();
+      const indent = b[1].replace(/\t/g, "    ").length;
+      while (stack.length && stack[stack.length - 1].indent > indent) stack.pop();
+      let top = stack[stack.length - 1];
+      if (!top || indent > top.indent) {
+        const ul = h("ul", {});
+        if (top) (top.ul.lastElementChild || top.ul).append(ul); else root.append(ul);
+        top = { indent, ul };
+        stack.push(top);
+      }
+      top.ul.append(h("li", {}, bulletContent(b[2])));
+      return;
+    }
+    // Ligne courte, sans ponctuation finale, suivie d'une liste : c'est un titre.
+    const next = lines.slice(i + 1).find((l) => l.trim());
+    const t = raw.trim();
+    if (t.length <= 90 && !/[.!?:;,]$/.test(t) && next && BULLET.test(next)) { flush(); stack = []; root.append(h("h4", {}, inlineText(t))); return; }
+    stack = [];
+    para.push(t);
+  });
+  flush();
+  return root;
+}
+
+/** Compte rendu d'une session : résumé en tête, texte complet dépliable s'il est long. */
+function compteRendu(text) {
+  const t = String(text || "").trim();
+  if (t.length <= 700) return richText(t, "session-resume");
+  const first = t.split(/\n\s*\n/)[0];
+  const isSummary = first && !BULLET.test(first.split("\n")[0]) && first.length < 600;
+  return h("div", { class: "cr" },
+    isSummary && h("p", { class: "cr-summary" }, inlineText(first.replace(/\s*\n\s*/g, " "))),
+    h("details", { class: "cr-full" }, h("summary", {}, "Lire le compte rendu complet"), richText(isSummary ? t.slice(first.length) : t, "session-resume")),
+  );
+}
+
+/** Lien de replay → adresse du lecteur intégrable (Vimeo, YouTube, Google Drive). */
+function embedUrl(u) {
+  let url;
+  try { url = new URL(u); } catch (_) { return ""; }
+  const host = url.hostname.replace(/^www\./, "");
+  if (host === "vimeo.com") {
+    const m = url.pathname.match(/^\/(?:manage\/videos\/|video\/)?(\d+)(?:\/([0-9a-f]{6,}))?/);
+    if (m) return `https://player.vimeo.com/video/${m[1]}?dnt=1${m[2] ? "&h=" + m[2] : ""}`;
+  }
+  if (host === "player.vimeo.com") {
+    const m = url.pathname.match(/^\/video\/(\d+)/), hash = url.searchParams.get("h");
+    if (m) return `https://player.vimeo.com/video/${m[1]}?dnt=1${hash ? "&h=" + encodeURIComponent(hash) : ""}`;
+  }
+  if (host === "youtube.com" || host === "m.youtube.com") {
+    const id = url.searchParams.get("v") || (url.pathname.match(/^\/(?:embed|shorts|live)\/([\w-]{6,})/) || [])[1];
+    if (id) return `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}`;
+  }
+  if (host === "youtu.be") {
+    const id = url.pathname.slice(1).split("/")[0];
+    if (/^[\w-]{6,}$/.test(id)) return `https://www.youtube-nocookie.com/embed/${id}`;
+  }
+  if (host === "drive.google.com") {
+    const id = (url.pathname.match(/\/file\/d\/([\w-]+)/) || [])[1] || url.searchParams.get("id");
+    if (id) return `https://drive.google.com/file/d/${encodeURIComponent(id)}/preview`;
+  }
+  return "";
+}
+
+/** Lecteur du replay, chargé seulement au clic (rien n'est demandé à Vimeo avant). */
+function replayPlayer(url) {
+  const src = embedUrl(url);
+  if (!src) return h("a", { class: "btn btn--ghost btn--sm", href: url, target: "_blank", rel: "noopener" }, icon("play"), "Revoir la session");
+  const box = h("div", { class: "player" });
+  const start = () => box.replaceChildren(h("iframe", {
+    src: src + (src.includes("?") ? "&" : "?") + "autoplay=1",
+    title: "Replay de la session",
+    allow: "autoplay; fullscreen; picture-in-picture",
+    allowfullscreen: true,
+    referrerpolicy: "strict-origin-when-cross-origin",
+  }));
+  box.append(h("button", { class: "player-start", type: "button", onclick: start }, h("span", { class: "player-ic" }, icon("play")), h("span", {}, "Regarder le replay")));
+  return h("div", { class: "replay" }, box, h("a", { class: "link replay-out", href: url, target: "_blank", rel: "noopener" }, "Ouvrir la vidéo dans un nouvel onglet"));
+}
+
+/** Actions de la partie « Prochaines étapes » : « (Nom) action ». Le nom du client → pour lui, sinon pour Mattéo. */
+function detectActions(text, c) {
+  const out = [];
+  let inSection = false;
+  for (const raw of String(text || "").replace(/\r\n?/g, "\n").split("\n")) {
+    const l = raw.trim();
+    if (!l) continue;
+    const b = l.match(/^[*•\-–]\s+(.*)$/);
+    if (!b) { inSection = /prochaines?\s+[ée]tapes|actions?\s+(?:à\s+)?(?:mener|faire)|à\s+faire|next\s+steps/i.test(l); continue; }
+    if (!inSection) continue;
+    let texte = b[1], pour = "client";
+    const m = texte.match(/^\(([^)]{1,40})\)\s*(.*)$/);
+    if (m) {
+      const who = m[1].toLowerCase();
+      pour = [c.prenom, c.nom].filter(Boolean).some((n) => who.includes(n.toLowerCase())) ? "client" : "matteo";
+      texte = m[2];
+    }
+    texte = texte.replace(/\*\*/g, "").trim();
+    if (texte) out.push({ texte: texte.slice(0, 240), pour });
+  }
+  return out;
+}
+
 function fileKind(d) {
   if (d.type?.startsWith("image/")) return "IMG";
   if (d.type === "application/pdf") return "PDF";
@@ -804,6 +939,24 @@ function sessionDialog(s, opts = {}) {
   const durees = DUREES.some(([v]) => v === duree) ? DUREES : [...DUREES, [duree, `${duree} min`]];
   const picker = filePicker({ name: "files", accept: DOC_ACCEPT, label: "Joindre le compte rendu", hint: "PDF, Word… Il sera aussi rangé dans le coffre-fort." });
 
+  // Actions repérées dans le compte rendu, à cocher avant d'enregistrer.
+  const detectBox = h("div", { class: "detect" });
+  let detectTimer = null;
+  const renderDetected = () => {
+    const txt = detectBox.closest("form")?.querySelector('textarea[name="resume"]')?.value || cur.resume || "";
+    const already = new Set(c.actions.filter((a) => s && a.sessionId === s.id).map((a) => a.texte));
+    const found = detectActions(txt, c).filter((a) => !already.has(a.texte));
+    if (!found.length) { detectBox.replaceChildren(); return; }
+    detectBox.replaceChildren(
+      h("p", { class: "detect-title" }, icon("check"), `${plural(found.length, "action repérée", "actions repérées")} dans les prochaines étapes`),
+      h("p", { class: "field-hint" }, "Coche celles à ajouter à la liste « À faire ». Elles seront rattachées à cette session."),
+      h("ul", {}, found.map((a, i) => h("li", { "data-texte": a.texte },
+        h("label", { class: "check" }, h("input", { type: "checkbox", name: `act_${i}`, checked: true }), h("span", {}, a.texte)),
+        select(`pour_${i}`, a.pour, { client: "Pour " + c.prenom, matteo: "Pour moi" }, { "aria-label": "Pour qui" }),
+      ))),
+    );
+  };
+
   const gBox = G.connected
     ? h("fieldset", { class: "gbox" },
         h("legend", {}, icon("calendar"), "Google Agenda"),
@@ -827,7 +980,9 @@ function sessionDialog(s, opts = {}) {
       if (files.length) say("Envoi du fichier…");
       const tickets = await uploadAll(files, (r) => say(`Envoi… ${Math.round(r * 100)} %`));
       say(google?.sync ? "Google Agenda…" : "Enregistrement…");
-      const res = await act("session.save", { id: s?.id, session: v, tickets, notify: v.notify === "on", google }, { ok: google?.sync ? "Session enregistrée et ajoutée à ton Google Agenda." : "Session enregistrée." });
+      const actions = [...detectBox.querySelectorAll("li")].filter((li) => li.querySelector('input[type="checkbox"]').checked).map((li) => ({ texte: li.dataset.texte, pour: li.querySelector("select").value }));
+      for (const k of Object.keys(v)) if (/^(act|pour)_\d+$/.test(k)) delete v[k];
+      const res = await act("session.save", { id: s?.id, session: v, tickets, notify: v.notify === "on", google, actions }, { ok: google?.sync ? "Session enregistrée et ajoutée à ton Google Agenda." : "Session enregistrée." });
       if (res) d.close();
     });
   } },
@@ -842,7 +997,8 @@ function sessionDialog(s, opts = {}) {
     h("div", { class: "form-row form-row--3" }, field("Date", input("date", cur.date, { type: "date", required: true })), field("Heure", input("heure", cur.heure, { type: "time" })), field("Durée", select("duree", duree, durees))),
     gBox,
     field("Titre", input("titre", cur.titre, { maxlength: 120, placeholder: "Ex. Montage du dossier bancaire" })),
-    field("Compte rendu", area("resume", cur.resume, { rows: 7, placeholder: "Ce qu'on a vu, ce qu'on a décidé. Visible par le client." })),
+    field("Compte rendu", area("resume", cur.resume, { rows: 12, placeholder: "Colle ici le compte rendu (Wispr Flow, notes…). Visible par le client.", oninput: () => { clearTimeout(detectTimer); detectTimer = setTimeout(renderDetected, 500); } }), "Titres, puces et sous-puces sont mis en forme. Les lignes de la partie « Prochaines étapes » deviennent des actions."),
+    detectBox,
     field("Lien du replay", input("replay", cur.replay, { inputmode: "url", autocapitalize: "off", placeholder: "https://…" }), "Les sessions sont enregistrées : colle ici le lien de la vidéo."),
     field("Lien de visio pour cette session", input("lien", cur.lien, { inputmode: "url", autocapitalize: "off", placeholder: G.connected ? "Rempli tout seul avec le lien Meet" : "Laisse vide pour utiliser le lien habituel" })),
     picker,
@@ -859,10 +1015,12 @@ function sessionDialog(s, opts = {}) {
     ),
   );
   const d = dialog({ title: s ? "Modifier la session" : "Ajouter une session", body: form, wide: true });
+  renderDetected();
 }
 
 function sessionCard(c, s, numero) {
   const docs = c.documents.filter((d) => d.sessionId === s.id);
+  const linked = c.actions.filter((a) => a.sessionId === s.id);
   const replay = safeUrl(s.replay);
   const done = s.statut === "faite";
   const visio = !done && s.type !== "presentiel" ? safeUrl(s.lien) || safeUrl(state.commun.reglages?.visio) : "";
@@ -886,10 +1044,14 @@ function sessionCard(c, s, numero) {
         isAdmin() && h("button", { class: "icon-btn", type: "button", "aria-label": "Modifier la session", onclick: () => sessionDialog(s) }, icon("edit")),
       ),
       gLine,
-      s.resume && pre(s.resume, "session-resume"),
-      (replay || visio || gcal) && h("div", { class: "session-links" },
+      replay && replayPlayer(replay),
+      s.resume && compteRendu(s.resume),
+      linked.length > 0 && h("div", { class: "session-actions" },
+        h("p", { class: "session-actions-title" }, `Actions décidées · ${linked.filter((a) => a.fait).length} sur ${linked.length} faites`),
+        h("ul", {}, linked.map((a) => h("li", { class: a.fait ? "is-done" : "" }, icon(a.fait ? "check" : "clock"), h("span", {}, a.texte, h("em", {}, " · " + (a.pour === "matteo" ? "Mattéo" : c.prenom)))))),
+      ),
+      (visio || gcal) && h("div", { class: "session-links" },
         visio && h("a", { class: "btn btn--dark btn--sm", href: visio, target: "_blank", rel: "noopener" }, icon("play"), isMeet(visio) ? "Rejoindre sur Google Meet" : "Rejoindre la visio"),
-        replay && h("a", { class: "btn btn--ghost btn--sm", href: replay, target: "_blank", rel: "noopener" }, icon("play"), "Revoir la session"),
         gcal && h("a", { class: "btn btn--ghost btn--sm", href: gcal, target: "_blank", rel: "noopener" }, icon("calendar"), "Google Agenda"),
       ),
       docs.length > 0 && h("ul", { class: "docs docs--inline" }, docs.map((d) => docRow(d, { compact: true }))),
@@ -1331,7 +1493,7 @@ function viewBien() {
   const verdict = b.verdict
     ? card({ class: "verdict verdict--" + a.cls },
         h("div", { class: "verdict-head" }, h("p", { class: "verdict-kicker" }, "Verdict de Mattéo · " + fmtIso(b.verdict.majLe || b.verdict.date)), h("p", { class: "verdict-avis" }, a.label), b.verdict.prixCible != null && h("p", { class: "verdict-prix" }, "Prix cible : ", h("strong", {}, eur(b.verdict.prixCible)))),
-        pre(b.verdict.texte),
+        richText(b.verdict.texte),
         isAdmin() && h("button", { class: "btn btn--ghost btn--sm", type: "button", onclick: () => verdictDialog(b) }, icon("edit"), "Modifier le verdict"),
       )
     : card({ class: "verdict verdict--wait" },

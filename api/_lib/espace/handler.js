@@ -214,7 +214,7 @@ function sessionFields(s = {}) {
     heure: time(s.heure),
     statut: oneOf(s.statut, ["planifiee", "faite"], "planifiee"),
     titre: line(s.titre, 120),
-    resume: text(s.resume, 6000),
+    resume: text(s.resume, 20000), // un compte rendu complet (Wispr Flow, notes) peut être long
     replay: url(s.replay),
     lien: url(s.lien),
     duree: num(s.duree, { min: 15, max: 720, dec: 0 }) ?? 60,
@@ -796,6 +796,9 @@ const ACTIONS = {
       const g = { sync: gb.sync === true, meet: gb.meet === true, invite: gb.invite === true };
       if (g.sync && !fields.heure) fail(400, "Indique l'heure de la session pour l'ajouter à Google Agenda.");
       const files = await claimUploads(cid, body.tickets, 5);
+      const newActions = (Array.isArray(body.actions) ? body.actions.slice(0, 40) : [])
+        .map((a) => ({ texte: line(a?.texte, 240), pour: oneOf(a?.pour, ["client", "matteo"], "client"), echeance: date(a?.echeance) }))
+        .filter((a) => a.texte);
       const id = body.id ? String(body.id) : newId("s_");
       let becameDone = false;
       const { data } = await change(cid, (d) => {
@@ -809,6 +812,11 @@ const ACTIONS = {
         Object.assign(s, fields);
         d.sessions.sort((a, b) => (a.date + (a.heure || "")).localeCompare(b.date + (b.heure || "")));
         addDocs(d, files.map((f) => asDoc(f, who, { categorie: "compte-rendu", sessionId: id })));
+        // Actions décidées pendant la session (repérées dans le compte rendu) : rattachées à la session.
+        for (const a of newActions) {
+          if (d.actions.some((x) => x.sessionId === id && x.texte === a.texte)) continue;
+          d.actions.push({ id: newId("a_"), texte: a.texte, pour: a.pour, echeance: a.echeance, fait: false, faitLe: null, faitPar: "", par: "matteo", sessionId: id, createdAt: nowIso() });
+        }
         if (becameDone) log(d, "matteo", "session", `Session du ${fields.date.split("-").reverse().join("/")} : compte rendu en ligne`, id);
       });
       let out = data, warning = "";

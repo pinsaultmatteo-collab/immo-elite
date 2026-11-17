@@ -274,6 +274,49 @@ p.card-pad { padding-bottom: 18px; }
 .inclus strong { color: var(--ink); font-size: 0.95rem; }
 
 .sessions { display: grid; gap: 12px; }
+/* Texte mis en forme (compte rendu, verdict) */
+.rt { display: grid; gap: 10px; font-size: 0.95rem; line-height: 1.55; overflow-wrap: anywhere; }
+.rt h4 { margin: 8px 0 0; font-family: var(--font-display); font-size: 1rem; letter-spacing: -0.01em; }
+.rt h4:first-child { margin-top: 0; }
+.rt p { margin: 0; }
+.rt ul { display: grid; gap: 5px; margin: 0; padding-left: 1.15rem; list-style: disc; }
+.rt ul ul { margin-top: 5px; list-style: circle; }
+.rt li::marker { color: var(--gold); }
+.rt-who { display: inline-block; padding: 0 8px; border-radius: 999px; background: var(--gold-soft); color: var(--gold-text); font-size: 0.76rem; font-weight: 700; line-height: 1.7; }
+.session-resume.rt { padding: 14px 16px; background: var(--cream); border-radius: var(--radius-sm); }
+.cr { display: grid; gap: 10px; }
+.cr-summary { padding: 12px 14px; border-left: 3px solid var(--gold); background: var(--cream); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; font-weight: 600; font-size: 0.95rem; }
+.cr-full summary { cursor: pointer; font-weight: 700; font-size: 0.88rem; color: var(--gold-text); padding: 4px 0; }
+.cr-full[open] summary { margin-bottom: 8px; }
+/* Replay intégré */
+.replay { display: grid; gap: 6px; }
+.player { position: relative; aspect-ratio: 16 / 9; border-radius: var(--radius-sm); overflow: hidden; background: var(--ink); }
+.player iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.player-start { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 10px; color: var(--cream); font-weight: 700; background: radial-gradient(circle at 50% 45%, rgba(176, 141, 63, 0.28), transparent 60%), var(--ink); }
+.player-ic { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; background: var(--gold); color: var(--ink); transition: transform 0.3s var(--ease); }
+.player-ic .ic { width: 28px; height: 28px; }
+.player-start:hover .player-ic { transform: scale(1.06); }
+.replay-out { justify-self: start; font-size: 0.82rem; }
+/* Actions d'une session */
+.session-actions { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.session-actions-title { font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 700; color: var(--gold-text); }
+.session-actions ul { display: grid; gap: 6px; }
+.session-actions li { display: flex; gap: 8px; align-items: flex-start; font-size: 0.9rem; }
+.session-actions li .ic { width: 16px; height: 16px; margin-top: 3px; color: var(--muted); flex: none; }
+.session-actions li.is-done { color: var(--muted); }
+.session-actions li.is-done .ic { color: var(--ok); }
+.session-actions li em { font-style: normal; font-size: 0.8rem; color: var(--muted); }
+/* Actions repérées dans le formulaire */
+.detect:empty { display: none; }
+.detect { display: grid; gap: 8px; padding: 14px 16px; border-radius: var(--radius-sm); background: var(--white); border: 1px solid var(--line); }
+.detect-title { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 0.92rem; }
+.detect-title .ic { width: 17px; height: 17px; color: var(--gold-deep); }
+.detect ul { display: grid; gap: 8px; }
+.detect li { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; padding-top: 8px; border-top: 1px solid var(--line); }
+.detect li .check { align-items: flex-start; }
+.detect li .check input { margin-top: 2px; flex: none; }
+.detect li select.input { min-height: 40px; padding: 6px 34px 6px 10px; font-size: 0.86rem; }
+@media (max-width: 619px) { .detect li { grid-template-columns: 1fr; } }
 .session { display: grid; grid-template-columns: 38px 1fr; gap: 14px; background: var(--white); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow); }
 .session-mark { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; background: var(--sand); color: var(--muted); }
 .session--done .session-mark { background: var(--gold-soft); color: var(--gold-deep); }
