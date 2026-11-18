@@ -92,6 +92,7 @@ function viewFor(who, data) {
   if (who.role !== "admin") {
     delete d.notesPrivees;
     for (const s of d.sessions) for (const k of ["notesPrivees", "googleEventId", "googleHtmlLink", "googleSync", "googleInvite", "googleError", "googleErrorAt"]) delete s[k];
+    for (const b of d.biens) delete b.verdictDraft; // brouillon de verdict : réservé à Mattéo
   }
   for (const doc of d.documents) delete doc.path;
   for (const b of d.biens) for (const p of b.photos) delete p.path;
@@ -322,7 +323,7 @@ function summarize(d) {
 function inbox(d) {
   const items = [];
   for (const b of d.biens) {
-    if (b.statut !== "analyse") items.push({ type: "bien", clientId: d.id, client: fullName(d), ref: b.id, label: b.titre || b.ville || "Logement", detail: [b.ville, b.prix != null ? eur(b.prix) : ""].filter(Boolean).join(" · "), t: b.createdAt, statut: b.statut });
+    if (b.statut !== "analyse") items.push({ type: "bien", clientId: d.id, client: fullName(d), ref: b.id, label: b.titre || b.ville || "Logement", detail: [b.ville, b.prix != null ? eur(b.prix) : ""].filter(Boolean).join(" · "), t: b.createdAt, statut: b.statut, brouillon: Boolean(b.verdictDraft) });
     else if (b.nonLu?.matteo) items.push({ type: "message", clientId: d.id, client: fullName(d), ref: b.id, label: b.titre || "Logement", detail: "Nouveau message", t: b.messages.at(-1)?.date || b.updatedAt });
   }
   const docs = d.documents.filter((x) => x.source === "client" && !x.luLe);
@@ -573,6 +574,22 @@ const ACTIONS = {
     },
   },
 
+  /** Brouillon de verdict : enregistré sans être publié, jamais visible du client. */
+  "bien.draft": {
+    admin: true,
+    async run({ who, body }) {
+      const cid = clientIdOf(who, body);
+      const { data } = await change(cid, (d) => {
+        const b = find(d.biens, body.id, "Logement");
+        if (body.clear === true) { delete b.verdictDraft; return; }
+        const texte = text(body.texte, 6000);
+        if (!texte) fail(400, "Le brouillon est vide.");
+        b.verdictDraft = { avis: oneOf(body.avis, AVIS, ""), texte, prixCible: num(body.prixCible, { dec: 0 }), note: text(body.note, 1500), majLe: nowIso() };
+      });
+      return reply(who, data);
+    },
+  },
+
   "bien.statut": {
     admin: true,
     async run({ who, body }) {
@@ -687,6 +704,7 @@ const ACTIONS = {
         first = !b.verdict;
         b.verdict = { avis, texte, prixCible: num(body.prixCible, { dec: 0 }), date: b.verdict?.date || nowIso(), majLe: nowIso() };
         b.statut = "analyse";
+        delete b.verdictDraft; // publié : le brouillon n'a plus lieu d'être
         b.nonLu = { ...b.nonLu, client: true, matteo: false };
         addDocs(d, files.map((f) => asDoc(f, who, { categorie: "analyse", bienId: b.id })));
         if (first) log(d, "matteo", "verdict", `Verdict publié : ${b.titre}`, b.id);

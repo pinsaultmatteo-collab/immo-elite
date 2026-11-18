@@ -1200,7 +1200,7 @@ function bienCard(b) {
   const cover = b.photos[0];
   return h("li", {},
     h("a", { class: "bien", href: href("/logements/" + b.id) },
-      h("div", { class: "bien-cover" }, cover ? h("img", { src: fileUrl(cover.id), alt: "", loading: "lazy" }) : h("span", { class: "bien-nophoto" }, icon("building")), h("div", { class: "bien-badges" }, bienStatus(b), b.suivi && badge(SUIVIS[b.suivi], "badge--dark"))),
+      h("div", { class: "bien-cover" }, cover ? h("img", { src: fileUrl(cover.id), alt: "", loading: "lazy" }) : h("span", { class: "bien-nophoto" }, icon("building")), h("div", { class: "bien-badges" }, bienStatus(b), isAdmin() && b.verdictDraft && !b.verdict && badge("Brouillon prêt", "badge--gold"), b.suivi && badge(SUIVIS[b.suivi], "badge--dark"))),
       h("div", { class: "bien-body" },
         h("h3", {}, b.titre, unread && h("span", { class: "dot", title: "Du nouveau" })),
         h("p", { class: "muted" }, [[b.codePostal, b.ville].filter(Boolean).join(" "), BIEN_TYPES[b.type], b.surface != null ? `${b.surface} m²` : ""].filter(Boolean).join(" · ")),
@@ -1449,7 +1449,7 @@ function lightbox(photos, start) {
 }
 
 function verdictDialog(b) {
-  const c = state.client, v = b.verdict || {};
+  const c = state.client, draft = b.verdictDraft, v = draft || b.verdict || {};
   const picker = filePicker({ name: "files", accept: DOC_ACCEPT, label: "Joindre ton analyse", hint: "Excel de rentabilité, PDF… Rangée dans le coffre-fort, catégorie Analyse de bien." });
   const form = h("form", { class: "form", onsubmit: (e) => {
     e.preventDefault();
@@ -1462,14 +1462,29 @@ function verdictDialog(b) {
       if (res) d.close();
     });
   } },
+    draft && h("div", { class: "draft-note" },
+      h("p", {}, h("strong", {}, "Brouillon du " + fmtIso(draft.majLe)), " · pas encore visible par " + c.prenom + ". Relis, ajuste, puis publie."),
+      draft.note && richText(draft.note, "draft-note-text"),
+    ),
     h("div", { class: "avis-choice", role: "radiogroup", "aria-label": "Ton avis" }, Object.entries(AVIS).map(([k, a]) => h("label", { class: "avis avis--" + a.cls }, h("input", { type: "radio", name: "avis", value: k, required: true, checked: v.avis === k }), h("span", {}, a.label)))),
     field("Ton analyse", area("texte", v.texte, { rows: 9, required: true, placeholder: "Ton verdict chiffré : hypothèses de loyers, travaux, financement, points de vigilance, stratégie d'offre." })),
     field("Prix cible à proposer (€)", money("prixCible", v.prixCible), "Facultatif. Affiché en évidence au client."),
     picker,
     h("label", { class: "check" }, h("input", { type: "checkbox", name: "notify", checked: true }), h("span", {}, `Prévenir ${c.prenom} par e-mail`)),
-    h("div", { class: "dlg-actions" }, submitButton(b.verdict ? "Mettre à jour le verdict" : "Publier le verdict")),
+    h("div", { class: "dlg-actions" },
+      draft && h("button", { class: "btn btn--ghost btn--danger-text", type: "button", onclick: async () => {
+        if (await confirmBox("Supprimer ce brouillon ? Le verdict publié, s'il y en a un, n'est pas touché.", "Supprimer")) { const r = await act("bien.draft", { id: b.id, clear: true }, { ok: "Brouillon supprimé." }); if (r) d.close(); }
+      } }, "Supprimer le brouillon"),
+      h("button", { class: "btn btn--ghost", type: "button", onclick: async () => {
+        const f = formValues(form);
+        if (!String(f.texte || "").trim()) { toast("Écris ton analyse avant d'enregistrer le brouillon.", "error"); return; }
+        const r = await act("bien.draft", { id: b.id, avis: f.avis || "", texte: f.texte, prixCible: f.prixCible, note: draft?.note || "" }, { ok: "Brouillon enregistré, rien n'est publié." });
+        if (r) d.close();
+      } }, "Enregistrer le brouillon"),
+      submitButton(b.verdict ? "Mettre à jour le verdict" : "Publier le verdict"),
+    ),
   );
-  const d = dialog({ title: "Verdict : " + b.titre, body: form, wide: true });
+  const d = dialog({ title: (draft ? "Brouillon de verdict : " : "Verdict : ") + b.titre, body: form, wide: true });
 }
 
 function viewBien() {
@@ -1499,9 +1514,13 @@ function viewBien() {
     : card({ class: "verdict verdict--wait" },
         h("div", { class: "verdict-head" }, h("p", { class: "verdict-kicker" }, "Envoyé " + rel(b.createdAt)), h("p", { class: "verdict-avis" }, b.statut === "en_cours" ? "Analyse en cours" : "En attente d'analyse")),
         h("p", {}, T("Mattéo a reçu ta fiche. Son verdict chiffré arrive ici sous 48 h, et tu es prévenu par e-mail.", "Le client attend ton verdict chiffré, promis sous 48 h.")),
+        isAdmin() && b.verdictDraft && h("div", { class: "draft-note" },
+          h("p", {}, h("strong", {}, "Brouillon prêt"), ` · ${b.verdictDraft.avis ? AVIS[b.verdictDraft.avis].label : "avis à choisir"}${b.verdictDraft.prixCible != null ? " · prix cible " + eur(b.verdictDraft.prixCible) : ""} · ${fmtIso(b.verdictDraft.majLe)}`),
+          b.verdictDraft.note && richText(b.verdictDraft.note, "draft-note-text"),
+        ),
         isAdmin() && h("div", { class: "verdict-actions" },
           b.statut !== "en_cours" && h("button", { class: "btn btn--ghost btn--sm", type: "button", onclick: () => act("bien.statut", { id: b.id, statut: "en_cours" }, { ok: "Le client voit « Analyse en cours »." }) }, "Je m'en occupe"),
-          h("button", { class: "btn btn--gold btn--sm", type: "button", onclick: () => verdictDialog(b) }, icon("edit"), "Rédiger le verdict"),
+          h("button", { class: "btn btn--gold btn--sm", type: "button", onclick: () => verdictDialog(b) }, icon("edit"), b.verdictDraft ? "Relire et publier le brouillon" : "Rédiger le verdict"),
         ),
       );
 
@@ -1665,7 +1684,7 @@ function viewAdmin() {
       h("div", { class: "card-pad" }, cardHead("À traiter", h("span", { class: "muted" }, plural(A.aTraiter.length, "élément", "éléments")))),
       h("ul", { class: "inbox" }, A.aTraiter.map((it) => h("li", {}, h("a", { href: `#/c/${it.clientId}/${it.type === "document" ? "documents" : "logements/" + it.ref}` },
         h("span", { class: "feed-ic" }, icon(ic[it.type])),
-        h("span", { class: "feed-text" }, h("span", {}, h("strong", {}, it.client), " · ", it.label), h("em", {}, [it.type === "bien" ? (it.statut === "en_cours" ? "Analyse en cours" : "Logement à analyser") : it.detail, it.type === "bien" && it.detail, rel(it.t)].filter(Boolean).join(" · "))),
+        h("span", { class: "feed-text" }, h("span", {}, h("strong", {}, it.client), " · ", it.label), h("em", {}, [it.type === "bien" ? (it.brouillon ? "Brouillon de verdict prêt" : it.statut === "en_cours" ? "Analyse en cours" : "Logement à analyser") : it.detail, it.type === "bien" && it.detail, rel(it.t)].filter(Boolean).join(" · "))),
         icon("chevron", "feed-go"),
       )))),
     ),
