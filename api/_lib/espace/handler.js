@@ -179,6 +179,35 @@ function bienFields(b = {}) {
   };
 }
 
+/* ---------- Offres d'achat ---------- */
+
+const CONDITIONS_OFFRE = ["pret", "urbanisme", "hypotheques", "preemption", "copro", "travauxVendeur", "diagnostics", "autorisation", "venteBien", "libre"];
+
+/** Contenu d'une offre d'achat : tout est nettoyé, rien n'est interprété comme du HTML. */
+function offreFields(o = {}) {
+  const conditions = Array.isArray(o.conditions) ? [...new Set(o.conditions.filter((k) => CONDITIONS_OFFRE.includes(k)))] : [];
+  return {
+    // Le logement
+    adresse: line(o.adresse, 160), codePostal: line(o.codePostal, 10), ville: line(o.ville, 80),
+    nature: line(o.nature, 80), pieces: num(o.pieces, { max: 500, dec: 0 }), surface: num(o.surface, { max: 100000, dec: 2 }),
+    etage: line(o.etage, 40), lots: line(o.lots, 120), parcelle: line(o.parcelle, 40), parcelleLabel: line(o.parcelleLabel, 200),
+    prixAffiche: num(o.prixAffiche, { dec: 0 }), honoraires: oneOf(o.honoraires, ["inclus", "vendeur", "acquereur", "direct"], "inclus"), honorairesMontant: num(o.honorairesMontant, { dec: 0 }),
+    // Les acquéreurs
+    acquereurs: text(o.acquereurs, 300), adresseAcquereur: text(o.adresseAcquereur, 300), telephone: phone(o.telephone), email: cleanEmail(o.email),
+    // Le destinataire
+    destType: oneOf(o.destType, ["agence", "vendeur"], "agence"), destNom: line(o.destNom, 120), destAdresse: text(o.destAdresse, 300), vendeurNom: line(o.vendeurNom, 120),
+    // L'offre
+    montant: num(o.montant, { min: 1, dec: 0 }), dateOffre: date(o.dateOffre), dateVisite: date(o.dateVisite), validite: date(o.validite),
+    dateCompromis: date(o.dateCompromis), dateActe: date(o.dateActe), notaire: line(o.notaire, 160), villeSignature: line(o.villeSignature, 80),
+    // Le financement
+    pret: o.pret !== false, pretMontant: num(o.pretMontant, { dec: 0 }), pretDuree: num(o.pretDuree, { min: 1, max: 30, dec: 0 }), pretTaux: num(o.pretTaux, { max: 25, dec: 2 }),
+    apport: num(o.apport, { dec: 0 }), pretDelai: num(o.pretDelai, { min: 15, max: 120, dec: 0 }) ?? 45, attestation: o.attestation === true,
+    // Conditions et arguments
+    conditions, autorisationTexte: line(o.autorisationTexte, 240), venteBienTexte: line(o.venteBienTexte, 240), autresConditions: text(o.autresConditions, 1500),
+    justification: text(o.justification, 2000),
+  };
+}
+
 /* ---------- Négociation d'un logement ---------- */
 
 /** Étapes de négociation. Reprend l'ancien « prix de l'offre » unique comme première étape. */
@@ -669,6 +698,68 @@ const ACTIONS = {
           cta: { label: "Ouvrir le logement", url: `${espaceUrl(request)}#/c/${cid}/logements/${b.id}` },
         });
       }
+      return reply(who, data);
+    },
+  },
+
+  /** Enregistre une offre d'achat préparée avec le générateur (et, si demandé, l'ajoute à la négociation). */
+  "offre.save": {
+    async run({ request, who, body }) {
+      const cid = clientIdOf(who, body);
+      const o = offreFields(body.offre);
+      if (!o.montant) fail(400, "Indique le montant de ton offre.");
+      if (!o.adresse) fail(400, "Indique l'adresse du logement.");
+      const offreId = body.offreId && /^o_[A-Za-z0-9_-]{6,20}$/.test(String(body.offreId)) ? String(body.offreId) : newId("o_");
+      const stepId = newId("n_");
+      const addNego = body.addNego === true;
+      let isNew = false;
+      const { data } = await change(cid, (d) => {
+        const b = find(d.biens, body.id, "Logement");
+        b.offres = Array.isArray(b.offres) ? b.offres : [];
+        const existing = b.offres.find((x) => x.id === offreId);
+        isNew = !existing;
+        if (existing) Object.assign(existing, o, { majLe: nowIso() });
+        else {
+          b.offres.unshift({ id: offreId, ...o, par: side(who), createdAt: nowIso(), majLe: nowIso() });
+          if (b.offres.length > 20) b.offres.length = 20;
+          log(d, side(who), "suivi", `Offre d'achat préparée à ${eur(o.montant)} : ${b.titre}`, b.id);
+        }
+        if (addNego) {
+          const list = ensureNego(b);
+          const day = o.dateOffre || nowIso().slice(0, 10);
+          if (!list.some((n) => n.offreId === offreId) && !list.some((n) => n.id === stepId)) {
+            list.push({ id: stepId, par: "acheteur", montant: o.montant, date: day, note: "Offre écrite (générateur)", ajoutePar: side(who), offreId, createdAt: nowIso() });
+            sortNego(list);
+            syncOffre(b);
+            if (!b.suivi) { b.suivi = "offre"; b.suiviLe = nowIso(); }
+          }
+        }
+      });
+      if (isNew && who.role !== "admin") {
+        const b = data.biens.find((x) => x.id === body.id);
+        await notify({
+          to: notifyAddress(), replyTo: who.email,
+          subject: `${fullName(data)} a préparé une offre d'achat à ${eur(o.montant)} — ${b.titre}`,
+          eyebrow: "Offre d'achat", title: `Offre à ${eur(o.montant)} — ${b.titre}`,
+          lines: [`${fullName(data)} vient de préparer une offre d'achat avec le générateur de l'espace.`],
+          details: [["Prix affiché", o.prixAffiche != null ? eur(o.prixAffiche) : ""], ["Offre", eur(o.montant) + ecartPrix(o.prixAffiche, o.montant)], ["Prêt", o.pret ? [o.pretMontant != null ? eur(o.pretMontant) : "", o.pretDuree ? `${o.pretDuree} ans` : "", o.pretTaux != null ? `${String(o.pretTaux).replace(".", ",")} % max` : ""].filter(Boolean).join(" · ") : "Sans prêt"], ["Validité", o.validite ? o.validite.split("-").reverse().join("/") : ""]],
+          cta: { label: "Ouvrir l'offre", url: `${espaceUrl(request)}#/c/${cid}/logements/${b.id}/offre/${offreId}` },
+        });
+      }
+      return reply(who, data, { offreId });
+    },
+  },
+
+  "offre.delete": {
+    async run({ who, body }) {
+      const cid = clientIdOf(who, body);
+      const { data } = await change(cid, (d) => {
+        const b = find(d.biens, body.id, "Logement");
+        const o = (b.offres || []).find((x) => x.id === body.offreId);
+        if (!o) fail(404, "Offre introuvable.");
+        if (who.role !== "admin" && o.par !== "client") fail(403, "Cette offre a été préparée par Mattéo.");
+        b.offres = b.offres.filter((x) => x.id !== o.id);
+      });
       return reply(who, data);
     },
   },

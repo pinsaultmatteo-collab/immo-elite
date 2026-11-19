@@ -665,3 +665,76 @@ dialog { color: var(--ink); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
 }
+
+/* ---------- Générateur d'offre d'achat ---------- */
+.offer-layout { display: grid; gap: 22px; align-items: start; }
+.offer-form .form-submit { position: static; background: none; padding: 4px 0 0; display: grid; gap: 14px; justify-content: stretch; }
+.offer-buttons { display: flex; flex-wrap: wrap; gap: 10px; }
+.offer-buttons .btn { flex: 1 1 auto; }
+.btn--link { min-height: 40px; padding: 0 4px; background: none; color: var(--no); font-size: 0.86rem; justify-self: start; }
+.btn--link .ic { width: 16px; height: 16px; }
+.choices { display: flex; flex-wrap: wrap; gap: 8px; }
+.choice { position: relative; display: inline-flex; cursor: pointer; }
+.choice input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.choice span { padding: 10px 16px; border-radius: 999px; background: var(--white); box-shadow: inset 0 0 0 1.5px var(--line); font-weight: 600; font-size: 0.9rem; transition: background-color 0.2s ease, color 0.2s ease; }
+.choice input:checked + span { background: var(--ink); color: var(--cream); box-shadow: none; }
+.choice input:focus-visible + span { outline: 2px solid var(--gold); outline-offset: 2px; }
+.inline-input { display: flex; flex-wrap: wrap; gap: 8px; }
+.inline-input .input { flex: 1 1 220px; }
+.inline-input .btn { flex: none; min-height: 50px; }
+.parcelle-info { overflow-wrap: anywhere; }
+.parcelle-info .link { font-weight: 700; }
+.offer-form .chips { flex-wrap: wrap; overflow: visible; margin-top: -6px; }
+.conds { display: grid; }
+.conds li { display: grid; gap: 8px; padding: 11px 0; border-bottom: 1px solid var(--line); }
+.conds li:first-child { padding-top: 0; }
+.conds .check { align-items: flex-start; }
+.conds .check input { flex: none; margin-top: 2px; }
+.conds .check span { display: grid; gap: 1px; }
+.conds .check strong { font-size: 0.93rem; }
+.conds .check em { font-style: normal; font-size: 0.82rem; color: var(--muted); line-height: 1.4; }
+.conds li > div { padding-left: 30px; }
+.offer-side { display: grid; gap: 10px; min-width: 0; }
+.offer-side-title { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--gold-text); }
+.offer-preview { min-width: 0; padding: 26px 22px; background: var(--white); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+.offer-disclaimer { font-size: 0.8rem; color: var(--muted); }
+
+.offer-doc { display: grid; gap: 9px; font-family: Georgia, "Times New Roman", serif; font-size: 0.9rem; line-height: 1.55; color: var(--ink); overflow-wrap: anywhere; }
+.offer-doc p { margin: 0; }
+.offer-doc h3 { margin: 10px 0 0; font-family: var(--font-body); font-size: 0.74rem; font-weight: 800; letter-spacing: 0.13em; text-transform: uppercase; color: var(--gold-text); }
+.offer-doc ul { display: grid; gap: 3px; padding-left: 1.2em; list-style: disc; }
+.offer-doc .rt { font-size: inherit; gap: 6px; }
+.offer-head { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 10px; }
+.offer-from, .offer-to { display: grid; align-content: start; font-size: 0.86rem; line-height: 1.45; }
+.offer-to { padding-top: 34px; }
+.offer-date { text-align: right; }
+.offer-objet { margin: 4px 0 6px !important; }
+.offer-sign { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-top: 16px; }
+.offer-sign > div { display: grid; gap: 2px; align-content: start; font-size: 0.86rem; }
+.offer-line { margin-top: 52px; padding-top: 4px; border-top: 1px solid var(--ink); font-size: 0.76rem; color: var(--muted); }
+
+.offres li a { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.offres li:last-child a { border-bottom: 0; }
+.offres li a > span { flex: 1; min-width: 0; }
+.offres li em { font-style: normal; font-size: 0.84rem; color: var(--muted); }
+.offres li .ic { width: 18px; height: 18px; color: var(--muted); }
+
+@media (min-width: 1280px) {
+  .offer-layout { grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); }
+  .offer-side { position: sticky; top: 24px; max-height: calc(100dvh - 48px); grid-template-rows: auto minmax(0, 1fr) auto; }
+  .offer-preview { overflow-y: auto; padding: 34px 32px; }
+}
+
+/* Impression : seule la lettre est imprimée (bouton « Imprimer ou PDF »). */
+#print-root { display: none; }
+@media print {
+  @page { size: A4; margin: 16mm 18mm; }
+  html.printing, html.printing body { background: #fff !important; }
+  html.printing body > :not(#print-root) { display: none !important; }
+  html.printing #print-root { display: block !important; }
+  #print-root .offer-doc { font-size: 10.5pt; color: #000; gap: 7pt; }
+  #print-root .offer-doc h3 { color: #000; break-after: avoid; }
+  #print-root .offer-doc li, #print-root .offer-sign { break-inside: avoid; }
+  #print-root .offer-line { color: #444; border-top-color: #000; }
+}
+.parcelle-info.is-warn { color: var(--warn); font-weight: 600; }

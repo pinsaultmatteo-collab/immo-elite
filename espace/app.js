@@ -1487,11 +1487,353 @@ function verdictDialog(b) {
   const d = dialog({ title: (draft ? "Brouillon de verdict : " : "Verdict : ") + b.titre, body: form, wide: true });
 }
 
+/* ---------- Générateur d'offre d'achat ---------- */
+
+const NATURES = { appartement: "Appartement", maison: "Maison", immeuble: "Immeuble", local: "Local", parking: "Parking", terrain: "Terrain", autre: "Bien" };
+const COND_OFFRE = [
+  ["pret", "Obtention du prêt immobilier", "Indispensable si tu empruntes : en cas de refus de prêt, tu récupères ton dépôt de garantie."],
+  ["urbanisme", "Urbanisme sans servitude grave", "La note d'urbanisme ne doit rien révéler qui empêche l'usage normal du bien."],
+  ["hypotheques", "Pas d'hypothèque supérieure au prix", "Le vendeur doit pouvoir lever ses hypothèques avec le prix de vente."],
+  ["preemption", "Pas de préemption", "Si la mairie exerce son droit d'acheter en priorité, l'offre tombe."],
+  ["libre", "Bien libre le jour de l'acte", "Ni occupant ni encombrants le jour de la signature."],
+  ["copro", "Documents de copropriété", "Règlement, 3 derniers PV d'AG, carnet d'entretien, pré-état daté, sans travaux votés cachés."],
+  ["travauxVendeur", "Travaux votés payés par le vendeur", "Les travaux votés avant l'avant-contrat restent à la charge du vendeur."],
+  ["diagnostics", "Diagnostics sans mauvaise surprise", "Amiante, termites, électricité, gaz : rien de grave qui n'ait été signalé à la visite."],
+  ["autorisation", "Autorisation de travaux ou de division", "Déclaration préalable ou permis obtenu et définitif. Précise le projet."],
+  ["venteBien", "Vente préalable d'un de tes biens", "Seulement si cet achat dépend de la vente d'un autre bien."],
+];
+const COND_DEFAULT = ["pret", "urbanisme", "hypotheques", "preemption", "libre", "copro", "travauxVendeur"];
+
+/** Montant en toutes lettres (orthographe traditionnelle) : 139000 → « cent trente-neuf mille ». */
+function enLettres(n) {
+  n = Math.round(Math.abs(Number(n) || 0));
+  if (!n) return "zéro";
+  const u = ["", "un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit", "neuf", "dix", "onze", "douze", "treize", "quatorze", "quinze", "seize", "dix-sept", "dix-huit", "dix-neuf"];
+  const d = ["", "", "vingt", "trente", "quarante", "cinquante", "soixante", "soixante", "quatre-vingt", "quatre-vingt"];
+  const s100 = (x) => {
+    if (x < 20) return u[x];
+    const t = Math.floor(x / 10), r = x % 10;
+    if (t === 7 || t === 9) return d[t] + (t === 7 && r === 1 ? " et " : "-") + u[10 + r];
+    if (r === 0) return t === 8 ? "quatre-vingts" : d[t];
+    if (r === 1 && t !== 8) return d[t] + " et un";
+    return d[t] + "-" + u[r];
+  };
+  const s1000 = (x) => {
+    const c = Math.floor(x / 100), r = x % 100;
+    let out = c > 1 ? u[c] + " cent" + (r ? "" : "s") : c === 1 ? "cent" : "";
+    if (r) out += (out ? " " : "") + s100(r);
+    return out;
+  };
+  const m = Math.floor(n / 1e6), k = Math.floor((n % 1e6) / 1000), r = n % 1000;
+  const parts = [];
+  if (m) parts.push(m === 1 ? "un million" : s1000(m) + " millions");
+  if (k) parts.push(k === 1 ? "mille" : s1000(k).replace(/(cent|vingt)s$/, "$1") + " mille");
+  if (r) parts.push(s1000(r));
+  return parts.join(" ");
+}
+
+const euros = (n) => `${eur(n)} (${enLettres(n)}${n % 1e6 === 0 && n >= 1e6 ? " d'euros" : " euros"})`;
+const dateLongue = (s) => (s ? fmtDate(parseDay(s)) : "");
+
+function offreDefaults(b, c) {
+  const plus = (days) => { const x = new Date(); x.setDate(x.getDate() + days); return dayStr(x); };
+  return {
+    adresse: b.adresse || "", codePostal: b.codePostal || "", ville: b.ville || "", nature: NATURES[b.type] || "Appartement", pieces: b.pieces ?? "", surface: b.surface ?? "",
+    etage: "", lots: "", parcelle: "", parcelleLabel: "", prixAffiche: b.prix ?? "", honoraires: "inclus", honorairesMontant: "",
+    acquereurs: `${c.prenom} ${c.nom}`.trim(), adresseAcquereur: "", telephone: c.telephone || "", email: (c.emails || [])[0] || "",
+    destType: "agence", destNom: "", destAdresse: "", vendeurNom: "",
+    montant: "", dateOffre: today(), dateVisite: b.dateVisite || "", validite: plus(7), dateCompromis: plus(30), dateActe: plus(90), notaire: "", villeSignature: "",
+    pret: true, pretMontant: "", pretDuree: b.duree ?? 25, pretTaux: b.taux ?? "", apport: b.apport ?? "", pretDelai: 45, attestation: false,
+    conditions: ["maison", "terrain"].includes(b.type) ? COND_DEFAULT.filter((k) => k !== "copro" && k !== "travauxVendeur") : [...COND_DEFAULT], autorisationTexte: "", venteBienTexte: "", autresConditions: "", justification: "",
+  };
+}
+
+function readOffre(form) {
+  const fd = new FormData(form);
+  const v = Object.fromEntries(fd);
+  const n = {};
+  for (const k of ["pieces", "surface", "prixAffiche", "honorairesMontant", "montant", "pretMontant", "pretDuree", "pretTaux", "apport", "pretDelai"]) n[k] = toNum(v[k]);
+  return { ...v, ...n, pret: v.pret !== "non", attestation: v.attestation === "on", conditions: fd.getAll("conditions") };
+}
+
+/** La lettre d'offre, construite à partir des champs (jamais de HTML venant de la saisie). */
+function offreLettre(o) {
+  const noms = String(o.acquereurs || "").split("\n").map((x) => x.trim()).filter(Boolean);
+  const pl = noms.length > 1;
+  const v = (sing, plur) => (pl ? plur : sing);
+  const has = (k) => (o.conditions || []).includes(k);
+  const P = (...kids) => h("p", {}, kids);
+  const lieu = [o.codePostal, o.ville].filter(Boolean).join(" ");
+  const nature = [o.nature || "Bien", o.pieces ? `de ${plural(o.pieces, "pièce", "pièces")}` : ""].filter(Boolean).join(" ");
+  const honoraires = { inclus: "honoraires d'agence inclus", vendeur: "net vendeur, les honoraires d'agence restant à la charge du vendeur", acquereur: `net vendeur, auquel s'ajoutent les honoraires d'agence à la charge de l'acquéreur${o.honorairesMontant ? ` (${eur(o.honorairesMontant)})` : ""}`, direct: "sans intermédiaire ni honoraires d'agence" }[o.honoraires] || "";
+
+  const conds = [];
+  if (o.pret && has("pret")) conds.push(`l'obtention d'un ou plusieurs prêts immobiliers d'un montant maximum de ${o.pretMontant ? eur(o.pretMontant) : "… €"}, d'une durée maximale de ${o.pretDuree || "…"} ans, au taux nominal maximum de ${o.pretTaux != null ? String(o.pretTaux).replace(".", ",") : "…"} % hors assurance, dans un délai de ${o.pretDelai || 45} jours à compter de la signature de l'avant-contrat`);
+  if (has("urbanisme")) conds.push("l'obtention d'une note de renseignements d'urbanisme ne révélant aucune servitude ou prescription de nature à déprécier le bien ou à en empêcher l'usage normal");
+  if (has("hypotheques")) conds.push("l'absence d'inscription hypothécaire ou de privilège d'un montant supérieur au prix de vente, ou leur mainlevée au plus tard le jour de l'acte authentique");
+  if (has("preemption")) conds.push("le non-exercice de tout droit de préemption");
+  if (has("copro")) conds.push(`la communication, avant la signature de l'avant-contrat, du règlement de copropriété et de l'état descriptif de division, des procès-verbaux des trois dernières assemblées générales, du carnet d'entretien, de la fiche synthétique et du pré-état daté, ne révélant ni travaux votés ni procédure non portés à ${v("ma", "notre")} connaissance`);
+  if (has("diagnostics")) conds.push("la remise d'un dossier de diagnostic technique complet ne révélant aucun élément majeur non signalé lors de la visite (amiante, termites, installations électrique et de gaz)");
+  if (has("autorisation")) conds.push(`l'obtention d'une autorisation d'urbanisme définitive, purgée de tout recours et de tout retrait${o.autorisationTexte ? `, pour le projet suivant : ${o.autorisationTexte}` : ""}`);
+  if (has("venteBien")) conds.push(`la vente préalable de ${v("mon", "notre")} bien${o.venteBienTexte ? ` (${o.venteBienTexte})` : ""}`);
+  for (const l of String(o.autresConditions || "").split("\n").map((x) => x.trim().replace(/^[*•-]\s*/, "")).filter(Boolean)) conds.push(l.replace(/[.;]$/, ""));
+
+  const engagements = [];
+  if (has("libre")) engagements.push("Le bien sera libre de toute occupation et de tout encombrant au jour de la signature de l'acte authentique.");
+  if (has("travauxVendeur")) engagements.push("Les travaux votés en assemblée générale de copropriété avant la signature de l'avant-contrat resteront à la charge du vendeur, même si les appels de fonds correspondants sont exigibles après la vente.");
+
+  const calendrier = [
+    o.dateCompromis && `Signature de l'avant-contrat (compromis ou promesse de vente) au plus tard le ${dateLongue(o.dateCompromis)}.`,
+    o.dateActe && `Signature de l'acte authentique au plus tard le ${dateLongue(o.dateActe)}.`,
+    o.notaire && `${v("Notaire de l'acquéreur", "Notaire des acquéreurs")} : ${o.notaire}.`,
+  ].filter(Boolean);
+
+  const finance = o.pret
+    ? `Cette acquisition sera financée par un prêt immobilier${o.pretMontant ? ` de ${eur(o.pretMontant)}` : ""}${o.pretDuree ? ` sur ${o.pretDuree} ans maximum` : ""}${o.apport ? `, complété par un apport personnel de ${eur(o.apport)}` : ""}.${o.attestation ? ` ${v("Je dispose", "Nous disposons")} d'une attestation de financement, que ${v("je tiens", "nous tenons")} à votre disposition.` : ""}`
+    : `Cette acquisition sera financée sans recours à un prêt${o.apport ? `, au moyen de fonds propres à hauteur de ${eur(o.apport)}` : ""}. ${v("Je le confirmerai", "Nous le confirmerons")} par une mention manuscrite dans l'avant-contrat.`;
+
+  const dest = o.destType === "vendeur"
+    ? [o.vendeurNom || o.destNom || "Madame, Monsieur le vendeur", ...String(o.destAdresse || "").split("\n")]
+    : [o.destNom ? `Agence ${o.destNom.replace(/^agence\s+/i, "")}` : "À l'agence en charge de la vente", ...String(o.destAdresse || "").split("\n"), o.vendeurNom ? `Pour transmission à ${o.vendeurNom}` : "Pour transmission au vendeur"];
+
+  return h("article", { class: "offer-doc" },
+    h("div", { class: "offer-head" },
+      h("div", { class: "offer-from" }, (noms.length ? noms : ["Prénom NOM"]).map((x) => h("strong", {}, x)), String(o.adresseAcquereur || "").split("\n").filter(Boolean).map((x) => h("span", {}, x)), o.telephone && h("span", {}, o.telephone), o.email && h("span", {}, o.email)),
+      h("div", { class: "offer-to" }, dest.filter(Boolean).map((x, i) => (i === 0 ? h("strong", {}, x) : h("span", {}, x)))),
+    ),
+    h("p", { class: "offer-date" }, `${o.villeSignature || o.ville || "…"}, le ${dateLongue(o.dateOffre) || "…"}`),
+    h("p", { class: "offer-objet" }, h("strong", {}, "Objet : "), `offre d'achat — ${nature.toLowerCase()}, ${[o.adresse, lieu].filter(Boolean).join(", ") || "…"}`),
+    P("Madame, Monsieur,"),
+    P(`${o.dateVisite ? `À la suite de ${v("ma", "notre")} visite du ${dateLongue(o.dateVisite)}, ` : ""}${o.dateVisite ? v("j'ai", "nous avons") : v("J'ai", "Nous avons")} le plaisir de vous faire part de ${v("mon", "notre")} offre d'achat pour le bien désigné ci-dessous.`),
+    h("h3", {}, "Le bien"),
+    h("ul", {},
+      h("li", {}, `Adresse : ${[o.adresse, lieu].filter(Boolean).join(", ") || "…"}`),
+      h("li", {}, `Nature : ${nature.toLowerCase()}${o.surface ? `, d'une surface d'environ ${String(o.surface).replace(".", ",")} m² (surface « loi Carrez » à confirmer)` : ""}${o.etage ? `, situé au ${o.etage}` : ""}`),
+      o.lots && h("li", {}, `Lot(s) de copropriété : ${o.lots}`),
+      o.parcelleLabel && h("li", {}, `Référence cadastrale : ${o.parcelleLabel}`),
+      o.prixAffiche && h("li", {}, `Prix affiché : ${eur(o.prixAffiche)}`),
+    ),
+    h("h3", {}, v("Mon offre", "Notre offre")),
+    P(`${v("Je vous propose", "Nous vous proposons")} d'acquérir ce bien au prix de `, h("strong", {}, o.montant ? euros(o.montant) : "… €"), honoraires ? `, ${honoraires}.` : "."),
+    o.justification && richText(o.justification, "offer-justif"),
+    h("h3", {}, "Financement"),
+    P(finance),
+    conds.length > 0 && [h("h3", {}, "Conditions suspensives"), P(`Cette offre est faite sous les conditions suspensives suivantes, qui seront reprises dans l'avant-contrat :`), h("ul", {}, conds.map((x, i) => h("li", {}, x + (i === conds.length - 1 ? "." : " ;"))))],
+    engagements.length > 0 && [h("h3", {}, "Engagements"), engagements.map((x) => P(x))],
+    calendrier.length > 0 && [h("h3", {}, "Calendrier"), h("ul", {}, calendrier.map((x) => h("li", {}, x)))],
+    h("h3", {}, "Validité de l'offre"),
+    P(`Cette offre est valable jusqu'au ${dateLongue(o.validite) || "…"} inclus ; passé ce délai, elle sera caduque sans autre formalité. Si elle est acceptée, elle sera réitérée par la signature d'un avant-contrat chez le notaire, à compter de laquelle ${v("je bénéficierai", "nous bénéficierons")} du délai de rétractation de dix jours prévu par l'article L. 271-1 du Code de la construction et de l'habitation. Conformément à l'article 1589-1 du Code civil, aucune somme n'est versée à l'occasion de la présente offre.`),
+    P(`Dans l'attente de votre réponse, ${v("je vous prie", "nous vous prions")} d'agréer, Madame, Monsieur, l'expression de ${v("mes", "nos")} salutations distinguées.`),
+    h("div", { class: "offer-sign" },
+      h("div", {}, h("strong", {}, v("L'acquéreur", "Les acquéreurs")), (noms.length ? noms : ["Prénom NOM"]).map((x) => h("span", {}, x)), h("span", { class: "offer-line" }, "Signature")),
+      h("div", {}, h("strong", {}, "Bon pour acceptation"), h("span", {}, "Le vendeur, le …………………"), h("span", { class: "offer-line" }, "Signature")),
+    ),
+  );
+}
+
+/** Adresse → parcelle cadastrale, avec les services publics de la Géoplateforme (IGN). */
+async function lookupParcelle(q) {
+  const get = (u) => fetch(u, { signal: AbortSignal.timeout(12000) }).then((r) => { if (!r.ok) throw new Error(); return r.json(); });
+  let g;
+  try { g = await get(`https://data.geopf.fr/geocodage/search?q=${encodeURIComponent(q)}&limit=1&index=address`); } catch (_) { throw new Error("Le service d'adresses ne répond pas. Réessaie dans un instant."); }
+  const f = g.features?.[0];
+  if (!f) throw new Error("Adresse introuvable : vérifie le numéro, la rue et le code postal.");
+  const [lon, lat] = f.geometry.coordinates;
+  let r;
+  try { r = await get(`https://data.geopf.fr/geocodage/reverse?lon=${lon}&lat=${lat}&index=parcel&limit=1`); } catch (_) { throw new Error("Le service du cadastre ne répond pas. Réessaie dans un instant."); }
+  const c = r.features?.[0]?.properties;
+  if (!c?.id) throw new Error("Aucune parcelle trouvée à cette adresse.");
+  const p = f.properties;
+  const section = String(c.section || "").replace(/^0+/, "");
+  const numero = String(Number(c.number));
+  const prefixe = c.oldmunicipalitycode && c.oldmunicipalitycode !== "000" ? `préfixe ${c.oldmunicipalitycode}, ` : "";
+  const commune = p.district || p.city || "";
+  return {
+    id: c.id,
+    label: `${commune}, ${prefixe}section ${section}, n° ${numero} (identifiant ${c.id})`,
+    adresseTrouvee: p.label,
+    // Une bonne correspondance dépasse 0,9 ; en dessous, le service a souvent pris une autre rue.
+    precise: p.type === "housenumber" && p.score >= 0.8,
+    numeroTrouve: p.type === "housenumber",
+  };
+}
+
+/* Impression de la lettre seule. Les règles .printing ne jouent qu'à l'impression : l'écran ne change pas. */
+let printCleanup = null;
+function preparePrint(node, titre) {
+  printCleanup?.();
+  const root = h("div", { id: "print-root" }, node.cloneNode(true));
+  document.body.append(root);
+  const before = document.title;
+  document.title = titre;
+  document.documentElement.classList.add("printing");
+  printCleanup = () => { document.documentElement.classList.remove("printing"); root.remove(); document.title = before; printCleanup = null; };
+}
+function printOffre(node, titre) {
+  preparePrint(node, titre);
+  window.print();
+}
+window.addEventListener("afterprint", () => printCleanup?.());
+// Cmd+P sur la page d'une offre : on imprime aussi la lettre seule.
+window.addEventListener("beforeprint", () => {
+  const doc = !printCleanup && document.querySelector(".offer-preview .offer-doc");
+  if (doc) preparePrint(doc, document.title);
+});
+
+function offreView(b, offreId) {
+  const c = state.client;
+  const saved = offreId ? (b.offres || []).find((o) => o.id === offreId) : null;
+  if (offreId && !saved) return [pageHead({ back: { href: href(`/logements/${b.id}`), label: "Retour au logement" }, title: "Offre introuvable" }), card({}, empty("file", "Cette offre n'existe plus", "Elle a peut-être été supprimée."))];
+  const o = { ...offreDefaults(b, c), ...(saved || {}) };
+  const preview = h("div", { class: "offer-preview" });
+  const pretHint = h("span", { class: "field-hint" });
+  const parcelleInfo = h("p", { class: "field-hint parcelle-info" }, o.parcelle ? "" : "Renseigne l'adresse puis clique sur « Retrouver la parcelle ».");
+  let form;
+
+  const refresh = () => {
+    const d = readOffre(form);
+    preview.replaceChildren(offreLettre(d));
+    const suggestion = d.montant ? Math.max(0, Math.round((d.montant * 1.08 - (d.apport || 0)) / 1000) * 1000) : null;
+    pretHint.textContent = suggestion ? `Pour une offre à ${eur(d.montant)} avec 8 % de frais de notaire${d.apport ? " et ton apport" : ""} : environ ${eur(suggestion)}, hors travaux.` : "Le montant maximum que tu demanderas à la banque.";
+    form.querySelectorAll("[data-show]").forEach((el) => { const [k, val] = el.dataset.show.split("="); el.hidden = val === "on" ? !d.conditions.includes(k) : String(d[k]) !== val; });
+  };
+
+  const findParcelle = async (btn) => {
+    const d = readOffre(form);
+    const q = [d.adresse, d.codePostal, d.ville].filter(Boolean).join(" ");
+    if (!d.adresse) { toast("Indique d'abord l'adresse du logement.", "error"); return; }
+    btn.disabled = true;
+    parcelleInfo.classList.remove("is-warn");
+    parcelleInfo.textContent = "Recherche en cours…";
+    try {
+      const res = await lookupParcelle(q);
+      form.parcelle.value = res.id;
+      form.parcelleLabel.value = res.label;
+      parcelleInfo.classList.toggle("is-warn", !res.precise);
+      parcelleInfo.replaceChildren(
+        res.precise ? `Trouvée pour « ${res.adresseTrouvee} ». ` : res.numeroTrouve ? `Attention : l'adresse reconnue est « ${res.adresseTrouvee} », peut-être pas la bonne. Corrige l'adresse ou la parcelle. ` : `Attention : numéro introuvable, la parcelle est prise au milieu de « ${res.adresseTrouvee} ». Corrige-la avec le plan cadastral. `,
+        h("a", { class: "link", href: `https://cadastre.data.gouv.fr/map?style=ortho&parcelleId=${encodeURIComponent(res.id)}`, target: "_blank", rel: "noopener" }, "Vérifier sur le plan cadastral"),
+      );
+      refresh();
+    } catch (e) {
+      parcelleInfo.classList.add("is-warn");
+      parcelleInfo.textContent = e.message;
+    } finally {
+      btn.disabled = false;
+    }
+  };
+
+  const addJustif = (txt) => { const ta = form.justification; ta.value = (ta.value.trim() ? ta.value.trim() + " " : "") + txt; refresh(); ta.focus(); };
+  const radio = (name, value, label, checked) => h("label", { class: "choice" }, h("input", { type: "radio", name, value, checked }), h("span", {}, label));
+
+  form = h("form", { class: "form bien-form offer-form", oninput: refresh, onchange: refresh, onsubmit: (e) => {
+    e.preventDefault();
+    busy(form, async (say) => {
+      const d = readOffre(form);
+      if (!d.montant) throw new Error("Indique le montant de ton offre.");
+      say("Enregistrement…");
+      const res = await act("offre.save", { id: b.id, offreId: saved?.id, offre: d, addNego: d.addNego === "on" }, { ok: d.addNego === "on" ? "Offre enregistrée et ajoutée à la négociation." : "Offre enregistrée.", quiet: true });
+      if (res) { const target = `/logements/${b.id}/offre/${res.offreId}`; if (location.hash.endsWith(target)) render(); else go(target); }
+    });
+  } },
+    h("fieldset", {}, h("legend", {}, "Le logement"),
+      field("Adresse", input("adresse", o.adresse, { required: true, maxlength: 160 })),
+      h("div", { class: "form-row" }, field("Code postal", input("codePostal", o.codePostal, { maxlength: 10, inputmode: "numeric" })), field("Ville", input("ville", o.ville, { maxlength: 80 }))),
+      h("div", { class: "form-row form-row--3" }, field("Nature", input("nature", o.nature, { maxlength: 80 })), field("Pièces", money("pieces", o.pieces, { inputmode: "numeric" })), field("Surface (m²)", money("surface", o.surface))),
+      h("div", { class: "form-row" }, field("Étage", input("etage", o.etage, { maxlength: 40, placeholder: "Ex. 3e étage sans ascenseur" })), field("Lot(s) de copropriété", input("lots", o.lots, { maxlength: 120, placeholder: "Ex. lot n° 12 et cave n° 3" }))),
+      h("div", { class: "field" }, h("span", { class: "field-label" }, "Référence cadastrale"),
+        h("div", { class: "inline-input" }, input("parcelleLabel", o.parcelleLabel, { maxlength: 200, placeholder: "Section et numéro de parcelle" }), h("button", { class: "btn btn--dark btn--sm", type: "button", onclick: (e) => findParcelle(e.currentTarget) }, icon("pin"), "Retrouver la parcelle")),
+        h("input", { type: "hidden", name: "parcelle", value: o.parcelle }), parcelleInfo),
+      h("div", { class: "form-row" }, field("Prix affiché (€)", money("prixAffiche", o.prixAffiche)), field("Honoraires d'agence", select("honoraires", o.honoraires, { inclus: "Inclus dans le prix affiché", vendeur: "À la charge du vendeur", acquereur: "À la charge de l'acquéreur", direct: "Vente entre particuliers" }))),
+      h("div", { "data-show": "honoraires=acquereur" }, field("Montant des honoraires (€)", money("honorairesMontant", o.honorairesMontant))),
+    ),
+    h("fieldset", {}, h("legend", {}, "Mon offre"),
+      h("div", { class: "form-row" },
+        field("Montant proposé (€)", money("montant", o.montant, { required: true, placeholder: "Ex. 129 000" }), b.verdict?.prixCible != null ? `Prix cible de Mattéo : ${eur(b.verdict.prixCible)}.` : b.prix ? `Prix affiché : ${eur(b.prix)}.` : ""),
+        field("Offre valable jusqu'au", input("validite", o.validite, { type: "date" }), "Une semaine suffit en général."),
+      ),
+      h("div", { class: "form-row" }, field("Date de l'offre", input("dateOffre", o.dateOffre, { type: "date" })), field("Date de la visite", input("dateVisite", o.dateVisite, { type: "date" }))),
+      field("Pourquoi ce prix (facultatif)", area("justification", o.justification, { rows: 4, maxlength: 2000, placeholder: "Quelques phrases factuelles qui justifient ton prix : travaux, DPE, charges, prix du quartier." })),
+      h("div", { class: "chips" },
+        h("button", { class: "chip", type: "button", onclick: () => addJustif("Le bien nécessite d'importants travaux de rénovation, que j'estime à environ … €.") }, "+ Travaux"),
+        h("button", { class: "chip", type: "button", onclick: () => addJustif(`Son classement énergétique${b.dpe ? ` (DPE ${b.dpe})` : ""} impose des travaux d'isolation avant toute mise en location.`) }, "+ DPE"),
+        h("button", { class: "chip", type: "button", onclick: () => addJustif("Des travaux de copropriété sont à prévoir et pèseront sur le coût total de l'acquisition.") }, "+ Copropriété"),
+        h("button", { class: "chip", type: "button", onclick: () => addJustif("Mon offre tient compte des prix de vente constatés pour des biens comparables dans le quartier.") }, "+ Prix du quartier"),
+        h("button", { class: "chip", type: "button", onclick: () => addJustif("Mon financement est déjà étudié, ce qui me permet de m'engager rapidement.") }, "+ Financement prêt"),
+      ),
+    ),
+    h("fieldset", {}, h("legend", {}, "Financement"),
+      h("div", { class: "choices" }, radio("pret", "oui", "Avec un prêt immobilier", o.pret), radio("pret", "non", "Sans prêt", !o.pret)),
+      h("div", { "data-show": "pret=true", class: "form" },
+        h("div", { class: "form-row" }, field("Montant du prêt (€)", money("pretMontant", o.pretMontant)), field("Apport personnel (€)", money("apport", o.apport))),
+        pretHint,
+        h("div", { class: "form-row form-row--3" }, field("Durée max (ans)", money("pretDuree", o.pretDuree, { inputmode: "numeric" })), field("Taux max (%)", money("pretTaux", o.pretTaux, { placeholder: "Ex. 3,8" })), field("Délai d'obtention (jours)", money("pretDelai", o.pretDelai, { inputmode: "numeric" }))),
+        h("label", { class: "check" }, h("input", { type: "checkbox", name: "attestation", checked: o.attestation }), h("span", {}, "J'ai une attestation de financement (banque ou courtier)")),
+      ),
+    ),
+    h("fieldset", {}, h("legend", {}, "Conditions et engagements"),
+      h("p", { class: "fieldset-hint" }, "Les conditions de base sont cochées. Décoche seulement si tu sais pourquoi."),
+      h("ul", { class: "conds" }, COND_OFFRE.map(([k, label, hint]) => h("li", {},
+        h("label", { class: "check" }, h("input", { type: "checkbox", name: "conditions", value: k, checked: o.conditions.includes(k) }), h("span", {}, h("strong", {}, label), h("em", {}, hint))),
+        k === "autorisation" && h("div", { "data-show": "autorisation=on" }, input("autorisationTexte", o.autorisationTexte, { maxlength: 240, placeholder: "Ex. division en deux logements, création d'une porte palière" })),
+        k === "venteBien" && h("div", { "data-show": "venteBien=on" }, input("venteBienTexte", o.venteBienTexte, { maxlength: 240, placeholder: "Ex. appartement situé à Lyon, au prix minimum de 180 000 €" })),
+      ))),
+      field("Autres conditions (facultatif)", area("autresConditions", o.autresConditions, { rows: 3, maxlength: 1500, placeholder: "Une condition par ligne." })),
+    ),
+    h("fieldset", {}, h("legend", {}, "Acquéreur et destinataire"),
+      field("Acquéreur(s)", area("acquereurs", o.acquereurs, { rows: 2, maxlength: 300 }), "Un nom par ligne : la lettre passe au pluriel s'il y a deux acquéreurs."),
+      field("Adresse de l'acquéreur", area("adresseAcquereur", o.adresseAcquereur, { rows: 2, maxlength: 300 })),
+      h("div", { class: "form-row" }, field("Téléphone", input("telephone", o.telephone, { type: "tel" })), field("E-mail", input("email", o.email, { type: "email" }))),
+      h("div", { class: "choices" }, radio("destType", "agence", "Agence immobilière", o.destType !== "vendeur"), radio("destType", "vendeur", "Vendeur en direct", o.destType === "vendeur")),
+      h("div", { "data-show": "destType=agence" }, field("Nom de l'agence", input("destNom", o.destNom, { maxlength: 120 }))),
+      field("Adresse du destinataire", area("destAdresse", o.destAdresse, { rows: 2, maxlength: 300 })),
+      field("Nom du vendeur (si connu)", input("vendeurNom", o.vendeurNom, { maxlength: 120 })),
+    ),
+    h("fieldset", {}, h("legend", {}, "Calendrier"),
+      h("div", { class: "form-row" }, field("Avant-contrat au plus tard le", input("dateCompromis", o.dateCompromis, { type: "date" })), field("Acte authentique au plus tard le", input("dateActe", o.dateActe, { type: "date" }))),
+      h("div", { class: "form-row" }, field("Notaire (facultatif)", input("notaire", o.notaire, { maxlength: 160, placeholder: "Ex. Maître Dupont, Marseille" })), field("Lettre faite à", input("villeSignature", o.villeSignature, { maxlength: 80, placeholder: "Ta ville" }), "Vide : la ville du logement.")),
+    ),
+    h("div", { class: "form-submit offer-actions" },
+      h("label", { class: "check" }, h("input", { type: "checkbox", name: "addNego", checked: !saved }), h("span", {}, "Ajouter cette offre à la négociation du logement")),
+      h("div", { class: "offer-buttons" },
+        h("button", { class: "btn btn--ghost", type: "button", onclick: () => printOffre(preview.querySelector(".offer-doc"), `Offre d'achat - ${readOffre(form).adresse || b.titre}`) }, icon("download"), "Imprimer ou PDF"),
+        h("button", { class: "btn btn--ghost", type: "button", onclick: async () => { try { await navigator.clipboard.writeText(preview.innerText); toast("Texte de l'offre copié."); } catch (_) { toast("Copie impossible : sélectionne le texte de l'aperçu.", "error"); } } }, icon("file"), "Copier le texte"),
+        submitButton(saved ? "Mettre à jour l'offre" : "Enregistrer l'offre"),
+      ),
+      saved && (isAdmin() || saved.par === "client") && h("button", { class: "btn btn--link offer-delete", type: "button", onclick: async () => {
+        if (!(await confirmBox(`Supprimer l'offre à ${eur(saved.montant)} ? La négociation du logement n'est pas modifiée.`, "Supprimer"))) return;
+        const res = await act("offre.delete", { id: b.id, offreId: saved.id }, { ok: "Offre supprimée.", quiet: true });
+        if (res) go(`/logements/${b.id}`);
+      } }, icon("trash"), "Supprimer cette offre"),
+    ),
+  );
+  refresh();
+
+  return [
+    pageHead({ back: { href: href(`/logements/${b.id}`), label: "Retour au logement" }, eyebrow: "Offre d'achat", title: saved ? `Offre à ${eur(saved.montant)}` : "Préparer une offre d'achat", lead: `${b.titre}. Remplis le formulaire : la lettre se rédige à côté, prête à imprimer ou à enregistrer en PDF.` }),
+    h("div", { class: "offer-layout" }, form, h("div", { class: "offer-side" }, h("p", { class: "offer-side-title" }, "Aperçu de la lettre"), preview, h("p", { class: "offer-disclaimer" }, "Modèle indicatif : relis-le, et fais-le valider par Mattéo ou ton notaire avant de l'envoyer."))),
+  ];
+}
+
+function offresCard(b) {
+  const list = b.offres || [];
+  return card({},
+    cardHead("Offres d'achat", h("a", { class: "link", href: href(`/logements/${b.id}/offre`) }, "Préparer une offre")),
+    list.length
+      ? h("ul", { class: "offres" }, list.map((o) => h("li", {}, h("a", { href: href(`/logements/${b.id}/offre/${o.id}`) },
+          h("span", {}, h("strong", {}, eur(o.montant)), h("em", {}, ` · ${fmtIso(o.createdAt)} · ${o.par === "matteo" ? "préparée par Mattéo" : isAdmin() ? `préparée par ${state.client.prenom}` : "préparée par toi"}`)),
+          icon("chevron"),
+        ))))
+      : h("p", { class: "muted" }, "Prépare une offre écrite en quelques minutes : l'espace rédige la lettre, tu l'imprimes ou l'enregistres en PDF."),
+  );
+}
+
 function viewBien() {
   const c = state.client;
   const b = c.biens.find((x) => x.id === route.id);
   if (!b) return [pageHead({ back: { href: href("/logements"), label: "Tous les logements" }, title: "Logement introuvable" }), card({}, empty("building", "Ce logement n'existe plus", "Il a peut-être été retiré."))];
   if (route.sub === "modifier") return bienForm(b);
+  if (route.sub === "offre") return offreView(b, route.extra);
 
   // Ouvrir la fiche efface le point « du nouveau » (une seule fois par visite).
   if ((isAdmin() ? b.nonLu?.matteo : b.nonLu?.client) && !seenSent.has(b.id)) {
@@ -1542,6 +1884,7 @@ function viewBien() {
       actions: [
         lien && h("a", { class: "btn btn--ghost btn--sm", href: lien, target: "_blank", rel: "noopener" }, icon("external"), "Voir l'annonce"),
         h("a", { class: "btn btn--ghost btn--sm", href: href(`/logements/${b.id}/modifier`) }, icon("edit"), "Modifier"),
+        h("a", { class: "btn btn--gold btn--sm", href: href(`/logements/${b.id}/offre`) }, icon("file"), "Préparer une offre"),
       ],
     }),
     h("ul", { class: "facts" }, facts.map((f) => h("li", {}, f))),
@@ -1556,6 +1899,7 @@ function viewBien() {
           b.question && h("div", { class: "note" }, h("p", { class: "note-k" }, T("Ta question", "Sa question")), pre(b.question)),
         ),
         suiviCard(b),
+        offresCard(b),
         card({ class: "card--flush" }, h("div", { class: "card-pad" }, cardHead("Documents liés", h("button", { class: "link", type: "button", onclick: () => uploadDialog({ bienId: b.id, title: "Ajouter un document à ce logement" }) }, "Ajouter"))), docs.length ? h("ul", { class: "docs" }, docs.map((d) => docRow(d))) : h("p", { class: "muted card-pad" }, "DPE, diagnostics, devis, analyse : ils apparaissent ici et dans le coffre-fort.")),
       ),
     ),
@@ -1740,7 +2084,7 @@ function parseRoute() {
   const parts = location.hash.replace(/^#\/?/, "").split("/").filter(Boolean).map((p) => { try { return decodeURIComponent(p); } catch (_) { return p; } });
   let clientId = "";
   if (parts[0] === "c") { clientId = parts[1] || ""; parts.splice(0, 2); }
-  return { clientId, page: parts[0] || "", id: parts[1] || "", sub: parts[2] || "" };
+  return { clientId, page: parts[0] || "", id: parts[1] || "", sub: parts[2] || "", extra: parts[3] || "" };
 }
 
 function currentView() {
@@ -1765,7 +2109,7 @@ function render() {
   $app.replaceChildren(shell(currentView()));
 }
 
-const editing = () => route.id === "nouveau" || route.sub === "modifier" || Boolean(document.querySelector("dialog[open]"));
+const editing = () => route.id === "nouveau" || route.sub === "modifier" || route.sub === "offre" || Boolean(document.querySelector("dialog[open]"));
 
 async function onRoute() {
   const previous = route;
@@ -1788,7 +2132,7 @@ async function onRoute() {
     if (state.me) state.error = e.message;
   }
   render();
-  if (previous.page !== route.page || previous.id !== route.id || previous.sub !== route.sub) window.scrollTo(0, 0);
+  if (previous.page !== route.page || previous.id !== route.id || previous.sub !== route.sub || previous.extra !== route.extra) window.scrollTo(0, 0);
 }
 
 window.addEventListener("hashchange", onRoute);
