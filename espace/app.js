@@ -1593,8 +1593,8 @@ function offreLettre(o) {
     : `Cette acquisition sera financée sans recours à un prêt${o.apport ? `, au moyen de fonds propres à hauteur de ${eur(o.apport)}` : ""}. ${v("Je le confirmerai", "Nous le confirmerons")} par une mention manuscrite dans l'avant-contrat.`;
 
   const dest = o.destType === "vendeur"
-    ? [o.vendeurNom || o.destNom || "Madame, Monsieur le vendeur", ...String(o.destAdresse || "").split("\n")]
-    : [o.destNom ? `Agence ${o.destNom.replace(/^agence\s+/i, "")}` : "À l'agence en charge de la vente", ...String(o.destAdresse || "").split("\n"), o.vendeurNom ? `Pour transmission à ${o.vendeurNom}` : "Pour transmission au vendeur"];
+    ? [o.destNom || o.vendeurNom || "Au propriétaire", ...String(o.destAdresse || "").split("\n")]
+    : [o.destNom || "À l'agence en charge de la vente", ...String(o.destAdresse || "").split("\n"), o.vendeurNom ? `Pour transmission à ${o.vendeurNom}` : "Pour transmission au propriétaire"];
 
   return h("article", { class: "offer-doc" },
     h("div", { class: "offer-head" },
@@ -1685,8 +1685,11 @@ function offreView(b, offreId) {
   const saved = offreId ? (b.offres || []).find((o) => o.id === offreId) : null;
   if (offreId && !saved) return [pageHead({ back: { href: href(`/logements/${b.id}`), label: "Retour au logement" }, title: "Offre introuvable" }), card({}, empty("file", "Cette offre n'existe plus", "Elle a peut-être été supprimée."))];
   const o = { ...offreDefaults(b, c), ...(saved || {}) };
+  if (o.destType === "vendeur" && !o.destNom && o.vendeurNom) o.destNom = o.vendeurNom;
   const preview = h("div", { class: "offer-preview" });
   const pretHint = h("span", { class: "field-hint" });
+  const destLabel = h("span", { class: "field-label" });
+  const destInput = input("destNom", o.destNom, { maxlength: 120 });
   const parcelleInfo = h("p", { class: "field-hint parcelle-info" }, o.parcelle ? "" : "Renseigne l'adresse puis clique sur « Retrouver la parcelle ».");
   let form;
 
@@ -1695,6 +1698,9 @@ function offreView(b, offreId) {
     preview.replaceChildren(offreLettre(d));
     const suggestion = d.montant ? Math.max(0, Math.round((d.montant * 1.08 - (d.apport || 0)) / 1000) * 1000) : null;
     pretHint.textContent = suggestion ? `Pour une offre à ${eur(d.montant)} avec 8 % de frais de notaire${d.apport ? " et ton apport" : ""} : environ ${eur(suggestion)}, hors travaux.` : "Le montant maximum que tu demanderas à la banque.";
+    const agence = d.destType !== "vendeur";
+    destLabel.textContent = agence ? "Nom de l'agence immobilière" : "Nom du propriétaire";
+    destInput.placeholder = agence ? "Ex. Century 21 Vieux-Port" : "Ex. Madame Martine Durand";
     form.querySelectorAll("[data-show]").forEach((el) => { const [k, val] = el.dataset.show.split("="); el.hidden = val === "on" ? !d.conditions.includes(k) : String(d[k]) !== val; });
   };
 
@@ -1747,6 +1753,13 @@ function offreView(b, offreId) {
       h("div", { class: "form-row" }, field("Prix affiché (€)", money("prixAffiche", o.prixAffiche)), field("Honoraires d'agence", select("honoraires", o.honoraires, { inclus: "Inclus dans le prix affiché", vendeur: "À la charge du vendeur", acquereur: "À la charge de l'acquéreur", direct: "Vente entre particuliers" }))),
       h("div", { "data-show": "honoraires=acquereur" }, field("Montant des honoraires (€)", money("honorairesMontant", o.honorairesMontant))),
     ),
+    h("fieldset", {}, h("legend", {}, "Destinataire de l'offre"),
+      h("p", { class: "fieldset-hint" }, "À qui tu envoies l'offre : l'agence qui vend le bien, ou le propriétaire s'il vend lui-même."),
+      h("div", { class: "choices" }, radio("destType", "agence", "Une agence immobilière", o.destType !== "vendeur"), radio("destType", "vendeur", "Le propriétaire en direct", o.destType === "vendeur")),
+      h("label", { class: "field" }, destLabel, destInput),
+      field("Adresse du destinataire", area("destAdresse", o.destAdresse, { rows: 2, maxlength: 300, placeholder: "Numéro et rue\nCode postal et ville" })),
+      h("div", { "data-show": "destType=agence" }, field("Nom du propriétaire (si tu le connais)", input("vendeurNom", o.vendeurNom, { maxlength: 120 }), "La lettre précisera « Pour transmission à … »."))
+    ),
     h("fieldset", {}, h("legend", {}, "Mon offre"),
       h("div", { class: "form-row" },
         field("Montant proposé (€)", money("montant", o.montant, { required: true, placeholder: "Ex. 129 000" }), b.verdict?.prixCible != null ? `Prix cible de Mattéo : ${eur(b.verdict.prixCible)}.` : b.prix ? `Prix affiché : ${eur(b.prix)}.` : ""),
@@ -1780,14 +1793,10 @@ function offreView(b, offreId) {
       ))),
       field("Autres conditions (facultatif)", area("autresConditions", o.autresConditions, { rows: 3, maxlength: 1500, placeholder: "Une condition par ligne." })),
     ),
-    h("fieldset", {}, h("legend", {}, "Acquéreur et destinataire"),
+    h("fieldset", {}, h("legend", {}, "Acquéreur"),
       field("Acquéreur(s)", area("acquereurs", o.acquereurs, { rows: 2, maxlength: 300 }), "Un nom par ligne : la lettre passe au pluriel s'il y a deux acquéreurs."),
       field("Adresse de l'acquéreur", area("adresseAcquereur", o.adresseAcquereur, { rows: 2, maxlength: 300 })),
       h("div", { class: "form-row" }, field("Téléphone", input("telephone", o.telephone, { type: "tel" })), field("E-mail", input("email", o.email, { type: "email" }))),
-      h("div", { class: "choices" }, radio("destType", "agence", "Agence immobilière", o.destType !== "vendeur"), radio("destType", "vendeur", "Vendeur en direct", o.destType === "vendeur")),
-      h("div", { "data-show": "destType=agence" }, field("Nom de l'agence", input("destNom", o.destNom, { maxlength: 120 }))),
-      field("Adresse du destinataire", area("destAdresse", o.destAdresse, { rows: 2, maxlength: 300 })),
-      field("Nom du vendeur (si connu)", input("vendeurNom", o.vendeurNom, { maxlength: 120 })),
     ),
     h("fieldset", {}, h("legend", {}, "Calendrier"),
       h("div", { class: "form-row" }, field("Avant-contrat au plus tard le", input("dateCompromis", o.dateCompromis, { type: "date" })), field("Acte authentique au plus tard le", input("dateActe", o.dateActe, { type: "date" }))),
